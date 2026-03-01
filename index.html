@@ -577,6 +577,71 @@
 
   <!-- Main App Script -->
   <script>
+    // ── Protocol check ───────────────────────────────────────────────────────
+    if (location.protocol === 'file:') {
+      document.getElementById('loading').innerHTML = `
+        <div style="max-width:440px;background:#12121f;border:1px solid #2a2a3a;border-radius:24px;padding:40px;text-align:center;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#f7c948,#ff922b)"></div>
+          <div style="font-size:40px;margin-bottom:16px">⚠️</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;margin-bottom:12px;color:#e0e0f0">Требуется HTTP-сервер</div>
+          <div style="color:#9090b0;font-size:13px;line-height:1.7;margin-bottom:24px">
+            Firebase не работает при открытии файла напрямую (<code style="color:#f7c948">file://</code>).<br>
+            Запустите файл через локальный сервер:
+          </div>
+          <div style="background:#0a0a12;border:1px solid #2a2a3a;border-radius:12px;padding:16px;text-align:left;font-size:12px;margin-bottom:20px">
+            <div style="color:#505070;margin-bottom:8px;font-size:10px;letter-spacing:1px">ВАРИАНТ 1 — Python</div>
+            <code style="color:#00d68f">python3 -m http.server 8080</code><br>
+            <div style="color:#505070;margin:10px 0 6px;font-size:10px;letter-spacing:1px">ВАРИАНТ 2 — Node.js</div>
+            <code style="color:#00d68f">npx serve .</code><br>
+            <div style="color:#505070;margin:10px 0 6px;font-size:10px;letter-spacing:1px">ВАРИАНТ 3 — VS Code</div>
+            <code style="color:#00d68f">Live Server (расширение)</code>
+          </div>
+          <div style="color:#505070;font-size:11px">Затем откройте <code style="color:#6c5ce7">http://localhost:8080</code></div>
+          <div style="margin-top:24px;padding:16px;background:rgba(108,92,231,0.08);border:1px solid rgba(108,92,231,0.2);border-radius:12px;text-align:left">
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:#6c5ce7;margin-bottom:8px">📋 Также настройте правила Firebase</div>
+            <div style="color:#9090b0;font-size:11px;margin-bottom:8px">В Firebase Console → Realtime Database → Rules:</div>
+            <pre style="color:#00d68f;font-size:11px;margin:0;white-space:pre-wrap">{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "nickToUid": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "chats": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "messages": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "userChats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null"
+      }
+    },
+    "calls": {
+      ".indexOn": ["calleeId", "createdAt"],
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}</pre>
+          </div>
+        </div>`;
+      throw new Error('file:// protocol — use HTTP server');
+    }
+
     // Init Firebase
     firebase.initializeApp(FIREBASE_CONFIG);
     const auth = firebase.auth();
@@ -596,7 +661,37 @@
     let selectedMembers = [];
 
     const COLORS = ['#6c5ce7', '#00d68f', '#f7c948', '#ff4d6d', '#339af0', '#b197fc', '#ff922b'];
-    const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+    const ICE_SERVERS = {
+      iceServers: [
+        // STUN — определяет внешний IP
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        // TURN — ретранслятор для пробивки NAT (без него звонки падают за роутером)
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ],
+      iceCandidatePoolSize: 10
+    };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const getInitials = (name) => (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
@@ -1126,30 +1221,54 @@
     }
 
     // ── Calls ─────────────────────────────────────────────────────────────────
+
+    // Helper: safely detach all listeners for a specific call
+    function detachCallListeners(callId) {
+      if (!callId) return;
+      db.ref('calls/' + callId + '/status').off('value');
+      db.ref('calls/' + callId + '/answer').off('value');
+      db.ref('calls/' + callId + '/ice_callee').off('child_added');
+      db.ref('calls/' + callId + '/ice_caller').off('child_added');
+    }
+
     function listenForCalls() {
       if (callsListener) return;
       if (!currentUser) return;
-      const ref = db.ref('calls').orderByChild('calleeId').equalTo(currentUser.uid);
-      const handler = (snap) => {
-        const call = snap.val();
-        if (call.status !== 'pending' || callState) return;
-        incomingCall = { id: snap.key, ...call };
-        document.getElementById('incoming-name').textContent = call.callerName || 'Входящий звонок';
-        document.getElementById('incoming-type').textContent = call.type === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
-        document.getElementById('incoming-call').classList.remove('hidden');
-        incomingCall.timeout = setTimeout(() => {
-          if (incomingCall) { db.ref('calls/' + incomingCall.id + '/status').set('rejected'); document.getElementById('incoming-call').classList.add('hidden'); incomingCall = null; }
-        }, 30000);
-      };
-      callsListener = { ref, handler };
-      ref.on('child_added', handler);
-      db.ref('calls').on('child_changed', snap => {
-        const call = snap.val();
-        if (!call || !callState) return;
-        if ((call.status === 'ended' || call.status === 'rejected') && (call.callerId === currentUser.uid || call.calleeId === currentUser.uid)) {
-          showToast('Звонок', call.status === 'ended' ? 'Завершён' : 'Отклонён', 'success');
-          endCall();
-        }
+
+      // First get server time offset, then subscribe only to calls created AFTER now
+      db.ref('.info/serverTimeOffset').once('value', offsetSnap => {
+        const offset = offsetSnap.val() || 0;
+        const serverNow = Date.now() + offset;
+
+        // Only listen to calls created from this moment forward
+        const ref = db.ref('calls')
+          .orderByChild('createdAt')
+          .startAt(serverNow);
+
+        const handler = (snap) => {
+          const call = snap.val();
+          if (!call) return;
+          if (call.calleeId !== currentUser.uid) return; // filter client-side
+          if (call.status !== 'pending') return;
+          if (callState) return; // already in a call
+          if (incomingCall) return; // already showing one
+
+          incomingCall = { id: snap.key, ...call };
+          document.getElementById('incoming-name').textContent = call.callerName || 'Входящий звонок';
+          document.getElementById('incoming-type').textContent = call.type === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
+          document.getElementById('incoming-call').classList.remove('hidden');
+
+          incomingCall.timeout = setTimeout(() => {
+            if (incomingCall && incomingCall.id === snap.key) {
+              db.ref('calls/' + snap.key).remove(); // delete instead of setting status
+              document.getElementById('incoming-call').classList.add('hidden');
+              incomingCall = null;
+            }
+          }, 30000);
+        };
+
+        callsListener = { ref, handler };
+        ref.on('child_added', handler);
       });
     }
 
@@ -1160,26 +1279,89 @@
       if (!activeChat || activeChat.type !== 'dm') return;
       const info = await getChatDisplayInfo(activeChat);
       if (!info.uid) { showToast('Ошибка', 'Не удалось найти пользователя', 'error'); return; }
-      const callId = Math.random().toString(36).substring(2, 10);
-      callState = { id: callId, type, role: 'caller', otherId: info.uid, peer: new RTCPeerConnection(ICE_SERVERS), localStream: null, screenStream: null, muted: false, camOn: type === 'video', screenOn: false };
-      const pc = callState.peer;
+      const callId = db.ref('calls').push().key;
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      callState = { id: callId, type, role: 'caller', otherId: info.uid, peer: pc, localStream: null, screenStream: null, muted: false, camOn: type === 'video', screenOn: false };
+
       try {
         callState.localStream = await navigator.mediaDevices.getUserMedia(type === 'video' ? { audio: true, video: true } : { audio: true });
         callState.localStream.getTracks().forEach(t => pc.addTrack(t, callState.localStream));
-      } catch(e) {}
+      } catch(e) { console.warn('Media error:', e); }
+
+      const iceQueue = [];
       pc.onicecandidate = e => { if (e.candidate) db.ref('calls/' + callId + '/ice_caller').push(e.candidate.toJSON()); };
       pc.ontrack = e => setupRemoteStream(e.streams[0]);
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') startCallTimer();
-        if (['disconnected','failed','closed'].includes(pc.connectionState)) endCall();
+        console.log('[caller] connectionState:', pc.connectionState);
+        if (pc.connectionState === 'connected') {
+          startCallTimer();
+        } else if (pc.connectionState === 'failed') {
+          // Try ICE restart before giving up
+          console.log('[caller] Attempting ICE restart...');
+          pc.restartIce();
+          setTimeout(() => {
+            if (callState && callState.peer === pc && pc.connectionState === 'failed') {
+              console.log('[caller] ICE restart failed after 8s, ending call');
+              showToast('Звонок', 'Нет соединения', 'error');
+              endCall();
+            }
+          }, 8000);
+        } else if (pc.connectionState === 'closed') {
+          console.log('[caller] peer closed');
+          endCall();
+        }
       };
+      pc.onicegatheringstatechange = () => console.log('[caller] iceGathering:', pc.iceGatheringState);
+      pc.oniceconnectionstatechange = () => console.log('[caller] iceConnection:', pc.iceConnectionState);
+
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await db.ref('calls/' + callId).set({ type, callerId: currentUser.uid, calleeId: info.uid, callerName: currentUser.name, status: 'pending', offer: { sdp: offer.sdp, type: offer.type }, createdAt: firebase.database.ServerValue.TIMESTAMP });
-      db.ref('calls/' + callId + '/answer').on('value', async snap => {
-        if (snap.exists() && pc.signalingState === 'have-local-offer') await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+
+      // Write call record to Firebase
+      await db.ref('calls/' + callId).set({
+        type, callerId: currentUser.uid, calleeId: info.uid,
+        callerName: currentUser.name, status: 'pending',
+        offer: { sdp: offer.sdp, type: offer.type },
+        createdAt: firebase.database.ServerValue.TIMESTAMP
       });
-      db.ref('calls/' + callId + '/ice_callee').on('child_added', snap => { if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(snap.val())); });
+
+      // ── Watch status (two phases: before accept = watch rejected; after accept = watch ended) ──
+      let callAccepted = false;
+      db.ref('calls/' + callId + '/status').on('value', statusSnap => {
+        const s = statusSnap.val();
+        console.log('[caller] status ->', s, '| accepted:', callAccepted, '| callState:', callState?.id);
+        if (!callState || callState.id !== callId) return;
+        if (s === 'active') {
+          // Call was accepted by callee — no longer care about 'rejected'
+          callAccepted = true;
+          return;
+        }
+        if (!callAccepted && s === 'rejected') {
+          console.log('[caller] ending: rejected before answer');
+          showToast('Звонок', 'Отклонён', '');
+          endCall();
+        } else if (callAccepted && (s === 'ended' || s === null)) {
+          console.log('[caller] ending: remote ended after active');
+          showToast('Звонок', 'Завершён', '');
+          endCall();
+        }
+        // Ignore 'rejected' after call was already accepted — it's a stale write
+      });
+
+      // ── Watch callee ICE candidates ──
+      db.ref('calls/' + callId + '/ice_callee').on('child_added', snap => {
+        const c = snap.val();
+        if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.warn);
+        else iceQueue.push(c);
+      });
+
+      // ── Watch for answer ──
+      db.ref('calls/' + callId + '/answer').on('value', async snap => {
+        if (!snap.exists() || pc.signalingState !== 'have-local-offer') return;
+        await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+        while (iceQueue.length) pc.addIceCandidate(new RTCIceCandidate(iceQueue.shift())).catch(console.warn);
+      });
+
       showCallUI(info.name, type, info.color, info.initials);
     }
 
@@ -1188,33 +1370,85 @@
       clearTimeout(incomingCall.timeout);
       document.getElementById('incoming-call').classList.add('hidden');
       const call = incomingCall;
-      callState = { id: call.id, type: call.type, role: 'callee', otherId: call.callerId, peer: new RTCPeerConnection(ICE_SERVERS), localStream: null, screenStream: null, muted: false, camOn: call.type === 'video', screenOn: false };
-      const pc = callState.peer;
+      incomingCall = null;
+
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      callState = { id: call.id, type: call.type, role: 'callee', otherId: call.callerId, peer: pc, localStream: null, screenStream: null, muted: false, camOn: call.type === 'video', screenOn: false };
+
       try {
         callState.localStream = await navigator.mediaDevices.getUserMedia(call.type === 'video' ? { audio: true, video: true } : { audio: true });
         callState.localStream.getTracks().forEach(t => pc.addTrack(t, callState.localStream));
-      } catch(e) {}
+      } catch(e) { console.warn('Media error:', e); }
+
+      const iceQueue = [];
       pc.onicecandidate = e => { if (e.candidate) db.ref('calls/' + call.id + '/ice_callee').push(e.candidate.toJSON()); };
       pc.ontrack = e => setupRemoteStream(e.streams[0]);
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') startCallTimer();
-        if (['disconnected','failed','closed'].includes(pc.connectionState)) endCall();
+        console.log('[callee] connectionState:', pc.connectionState);
+        if (pc.connectionState === 'connected') {
+          startCallTimer();
+        } else if (pc.connectionState === 'failed') {
+          console.log('[callee] Attempting ICE restart...');
+          pc.restartIce();
+          setTimeout(() => {
+            if (callState && callState.peer === pc && pc.connectionState === 'failed') {
+              showToast('Звонок', 'Нет соединения', 'error');
+              endCall();
+            }
+          }, 8000);
+        } else if (pc.connectionState === 'closed') {
+          endCall();
+        }
       };
+      pc.onicegatheringstatechange = () => console.log('[callee] iceGathering:', pc.iceGatheringState);
+      pc.oniceconnectionstatechange = () => console.log('[callee] iceConnection:', pc.iceConnectionState);
+
+      // ── Watch caller ICE candidates ──
+      db.ref('calls/' + call.id + '/ice_caller').on('child_added', snap => {
+        const c = snap.val();
+        if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.warn);
+        else iceQueue.push(c);
+      });
+
       await pc.setRemoteDescription(new RTCSessionDescription(call.offer));
+      // Flush ICE candidates that arrived before setRemoteDescription
+      while (iceQueue.length) pc.addIceCandidate(new RTCIceCandidate(iceQueue.shift())).catch(console.warn);
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await db.ref('calls/' + call.id + '/answer').set({ sdp: answer.sdp, type: answer.type });
       await db.ref('calls/' + call.id + '/status').set('active');
-      db.ref('calls/' + call.id + '/ice_caller').on('child_added', snap => { if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(snap.val())); });
+
+      // ── Watch for caller ending the call ──
+      db.ref('calls/' + call.id + '/status').on('value', statusSnap => {
+        const s = statusSnap.val();
+        console.log('[callee] status changed ->', s, '| callState:', callState ? callState.id : 'null');
+        if (!callState || callState.id !== call.id) { console.log('[callee] status ignored (callState mismatch)'); return; }
+        if (s === 'ended' || s === null) {
+          console.log('[callee] ending: caller ended/deleted');
+          showToast('Звонок', 'Завершён', '');
+          endCall();
+        }
+      });
+
       const us = await db.ref('users/' + call.callerId).once('value');
       const u = us.val() || { name: call.callerName || '?', color: '#888' };
       showCallUI(u.name, call.type, u.color || '#888', getInitials(u.name));
-      incomingCall = null;
     }
 
     function rejectCall() {
-      if (incomingCall) { clearTimeout(incomingCall.timeout); db.ref('calls/' + incomingCall.id + '/status').set('rejected'); incomingCall = null; }
-      document.getElementById('incoming-call').classList.add('hidden');
+      if (incomingCall) {
+        clearTimeout(incomingCall.timeout);
+        const rejId = incomingCall.id; // capture before nulling
+        incomingCall = null;
+        document.getElementById('incoming-call').classList.add('hidden');
+        // Write rejected so caller sees it, then clean up
+        db.ref('calls/' + rejId + '/status').set('rejected')
+          .then(() => setTimeout(() => db.ref('calls/' + rejId).remove().catch(() => {}), 3000))
+          .catch(() => {});
+      } else {
+        document.getElementById('incoming-call').classList.add('hidden');
+      }
     }
 
     function setupRemoteStream(stream) {
@@ -1254,13 +1488,23 @@
     }
 
     function endCall() {
+      console.log('[endCall] called, callState:', callState ? callState.id : 'null', new Error().stack.split('\n')[1]);
       clearInterval(callTimer);
       if (callState) {
-        callState.localStream?.getTracks().forEach(t => t.stop());
-        callState.screenStream?.getTracks().forEach(t => t.stop());
-        callState.peer?.close();
-        if (callState.id) db.ref('calls/' + callState.id + '/status').set('ended');
+        const cid = callState.id;
+        const wasActive = callState.role; // 'caller' or 'callee'
+        // Null out callState FIRST so re-entrant listeners see null and bail out
+        const savedPeer = callState.peer;
+        const savedLocal = callState.localStream;
+        const savedScreen = callState.screenStream;
         callState = null;
+        // Detach all Firebase listeners for this call
+        detachCallListeners(cid);
+        // DELETE the call record entirely so it never re-triggers child_added
+        if (cid) db.ref('calls/' + cid).remove().catch(() => {});
+        savedLocal?.getTracks().forEach(t => t.stop());
+        savedScreen?.getTracks().forEach(t => t.stop());
+        savedPeer?.close();
       }
       ['local-video','remote-video'].forEach(id => { const v = document.getElementById(id); v.srcObject = null; v.style.display = 'none'; });
       document.getElementById('local-placeholder').style.display = 'flex';
@@ -1364,11 +1608,77 @@
       Notification.requestPermission().then(p => { if (p === 'granted') showToast('Уведомления', 'Разрешены', 'success'); });
     }
 
+    // ── Permission Error UI ──────────────────────────────────────────────────
+    function showPermissionError() {
+      document.getElementById('auth').classList.add('hidden');
+      document.getElementById('app').classList.add('hidden');
+      document.getElementById('loading').style.display = 'flex';
+      document.getElementById('loading').innerHTML = `
+        <div style="max-width:440px;background:#12121f;border:1px solid #2a2a3a;border-radius:24px;padding:40px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ff4d6d,#ff922b)"></div>
+          <div style="text-align:center;margin-bottom:24px">
+            <div style="font-size:36px;margin-bottom:12px">🔒</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:#e0e0f0">Ошибка доступа к базе данных</div>
+            <div style="color:#9090b0;font-size:12px;margin-top:8px">permission_denied — настройте правила Firebase</div>
+          </div>
+          <div style="background:#0a0a12;border:1px solid rgba(255,77,109,0.3);border-radius:12px;padding:16px;margin-bottom:16px">
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:11px;color:#ff4d6d;letter-spacing:1px;margin-bottom:10px">FIREBASE CONSOLE → REALTIME DATABASE → RULES</div>
+            <pre style="color:#00d68f;font-size:11px;margin:0;white-space:pre-wrap;overflow-x:auto">{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "nickToUid": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "chats": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "messages": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "userChats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null"
+      }
+    },
+    "calls": {
+      ".indexOn": ["calleeId", "createdAt"],
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}</pre>
+          </div>
+          <button onclick="location.reload()" style="width:100%;padding:12px;background:#6c5ce7;border:none;border-radius:10px;color:white;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer">Перезагрузить после настройки</button>
+        </div>`;
+    }
+
     // ── Auth State ────────────────────────────────────────────────────────────
     auth.onAuthStateChanged(async (user) => {
       document.getElementById('loading').style.display = 'none';
       if (user) {
-        const snap = await db.ref('users/' + user.uid).once('value');
+        let snap;
+        try {
+          snap = await db.ref('users/' + user.uid).once('value');
+        } catch (err) {
+          console.error('DB access error:', err);
+          if (err.code === 'PERMISSION_DENIED') {
+            showPermissionError();
+          }
+          return;
+        }
         if (!snap.exists()) { auth.signOut(); return; }
         currentUser = snap.val();
         document.getElementById('auth').classList.add('hidden');
