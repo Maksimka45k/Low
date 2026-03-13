@@ -885,6 +885,7 @@
     let selectedFilePreviewUrl = null;
     let sidebarTab = 'chats';
     let friendRequestsListener = null;
+    let newMessagesListener = null; // { ref, callback }
 
     const COLORS = ['#6c5ce7', '#00d68f', '#f7c948', '#ff4d6d', '#339af0', '#b197fc', '#ff922b'];
     const ICE_SERVERS = {
@@ -1199,128 +1200,159 @@
         statusEl.textContent = activeChat.type === 'channel' ? `📢 ${cnt} подписчиков` : `👥 ${cnt} участников`;
         statusEl.className = 'chat-header-status';
       }
+      if (newMessagesListener) {
+  newMessagesListener.ref.off('child_added', newMessagesListener.callback);
+  newMessagesListener = null;
+}
       loadMessages();
       loadChats();
     }
 
     function loadMessages() {
-      if (!activeChat) return;
-      const ref = db.ref('messages/' + activeChat.id);
-      const container = document.getElementById('messages');
-      container.innerHTML = '<div class="date-divider"><span>СЕГОДНЯ</span></div>';
-      const handler = ref.limitToLast(200).on('child_added', snap => {
-        const msg = { id: snap.key, ...snap.val() };
-        if (!document.querySelector(`[data-id="${msg.id}"]`)) appendMessage(msg);
-      });
-      messagesListener = () => ref.off('child_added', handler);
-    }
+  if (!activeChat) return;
+  const container = document.getElementById('messages');
+  container.innerHTML = ''; // очищаем перед загрузкой
 
-    async function appendMessage(msg) {
-      const container = document.getElementById('messages');
-      if (!container) return;
-      const isMe = msg.from === currentUser.uid;
-      let user = isMe ? currentUser : null;
-      if (!isMe) {
-        const s = await db.ref('users/' + msg.from).once('value');
-        user = s.val() || { name: msg.from, nick: msg.from, color: '#888' };
-      }
-      const showSender = !isMe && (activeChat.type === 'group' || activeChat.type === 'channel');
-      const color = user.color || getColorFromNick(user.nick || '');
-      const el = document.createElement('div');
-      el.className = 'message-wrapper ' + (isMe ? 'out' : 'in');
-      el.dataset.id = msg.id;
-      let bodyHtml = '';
-      // Если есть replyTo
-if (msg.replyTo) {
-  // Получаем имя автора исходного сообщения (асинхронно, но лучше сохранять при отправке)
-  const replySnap = await db.ref('users/' + msg.replyTo.from).once('value');
-  const replyUser = replySnap.val() || { name: 'Пользователь' };
-  bodyHtml += `
-    <div class="reply-to" onclick="jumpToMessage('${msg.replyTo.id}')">
-      <div class="reply-to-title">В ответ ${replyUser.name}</div>
-      <div class="reply-to-text">${escapeHtml(msg.replyTo.text || '')}</div>
-    </div>
-  `;
-}
+  const messagesRef = db.ref('messages/' + activeChat.id);
 
-// Основной текст
-if (msg.text) {
-  // здесь код преобразования ссылок, который мы уже добавили ранее
-  // ... (вставьте ваш текущий код обработки ссылок)
-}
-
-// Если есть файл
-if (msg.file && msg.file.url) {
-  // ... ваш текущий код для файла
-}
-
-// Если сообщение редактировалось
-if (msg.edited) {
-  bodyHtml += `<span class="edited-mark">(изменено)</span>`;
-}
-      if (msg.text) {
-  // Регулярное выражение для поиска ссылок:
-  // 1. С протоколом http:// или https://
-  // 2. Домены вида example.com, site.org (с точкой и доменной зоной из списка)
-  const urlRegex = /(https?:\/\/[^\s]+)|(\b[a-zA-Z0-9][a-zA-Z0-9\-]*\.(?:com|org|ru|io|net|edu|gov|mil|biz|info|name|pro|co|me|tv|cc|ws|xyz|site|online|tech|store|blog|app|dev|club|space|press|wiki|media|network|world|today|live|news|agency|email|shop|buzz|loan|work|jobs|mobi|tel|travel|aero|asia|cat|coop|jobs|museum|post|tel|xxx|[a-z]{2,6})(?::\d+)?(?:\/[^\s]*)?\b)/gi;
-
-  let parts = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = urlRegex.exec(msg.text)) !== null) {
-    // Экранируем обычный текст до найденной ссылки
-    parts.push(escapeHtml(msg.text.substring(lastIndex, match.index)));
-
-    let url = match[0];
-    let href = url;
-
-    // Если нет протокола, добавляем https://
-    if (!url.match(/^https?:\/\//i)) {
-      href = 'https://' + url;
-    }
-
-    // Вставляем кликабельную ссылку (сам url показываем как есть, но экранируем)
-    parts.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">${escapeHtml(url)}</a>`);
-
-    lastIndex = match.index + match[0].length;
+  // Убираем предыдущий слушатель новых сообщений
+  if (newMessagesListener) {
+    newMessagesListener.ref.off('child_added', newMessagesListener.callback);
+    newMessagesListener = null;
   }
 
-  // Добавляем остаток текста после последней ссылки
-  parts.push(escapeHtml(msg.text.substring(lastIndex)));
-  bodyHtml += parts.join('');
-}
-      if (msg.file && msg.file.url) {
-        const f = msg.file;
-        if (f.isImage) {
-          bodyHtml += `
-            <div class="message-file image">
-              <a href="${f.url}" target="_blank" rel="noopener">
-                <img src="${f.url}" alt="${escapeHtml(f.name || 'image')}">
-              </a>
-              <div class="message-file-name">${escapeHtml(f.name || '')}</div>
-            </div>`;
-        } else {
-          bodyHtml += `
-            <div class="message-file">
-              <a href="${f.url}" target="_blank" rel="noopener">📎 ${escapeHtml(f.name || 'файл')}</a>
-            </div>`;
-        }
-      }
-      el.innerHTML = `
-        ${!isMe ? `<div class="message-avatar" style="background:${color}">${getInitials(user.name)}</div>` : ''}
-        <div><div class="message-bubble">
-          ${showSender ? `<div class="message-sender">${user.name}</div>` : ''}
-          ${bodyHtml}
-          <div class="message-time">${msg.time || ''}${isMe ? ' ✓✓' : ''}</div>
-        </div></div>
-        ${isMe ? `<div class="message-avatar" style="background:${currentUser.color || getColorFromNick(currentUser.nick)}">${getInitials(currentUser.name)}</div>` : ''}`;
-      el.oncontextmenu = (e) => { e.preventDefault(); showContextMenu(e, msg, isMe); };
-      container.appendChild(el);
-      if (container.scrollHeight - container.scrollTop - container.clientHeight < 60) {
-        container.scrollTop = container.scrollHeight;
-      }
+  // Загружаем все существующие сообщения, отсортированные по времени
+  messagesRef.orderByChild('at').once('value', async (snapshot) => {
+    const messages = [];
+    snapshot.forEach(child => {
+      messages.push({ id: child.key, ...child.val() });
+    });
+
+    // Отрисовываем все сообщения без автоматической прокрутки
+    for (const msg of messages) {
+      await appendMessage(msg, false);
     }
+
+    // Прокручиваем вниз после полной загрузки
+    container.scrollTop = container.scrollHeight;
+
+    // Подписываемся на новые сообщения (после последнего загруженного)
+    const lastMsgAt = messages.length > 0 ? messages[messages.length - 1].at : 0;
+    const callback = (snap) => {
+      const msg = { id: snap.key, ...snap.val() };
+      appendMessage(msg, true);
+    };
+    const query = messagesRef.orderByChild('at').startAt(lastMsgAt + 1);
+    query.on('child_added', callback);
+    newMessagesListener = { ref: query, callback };
+  });
+}
+
+async function appendMessage(msg, scrollIfNearBottom = true) {
+  const container = document.getElementById('messages');
+  if (!container) return;
+
+  // Проверяем, не добавлено ли уже сообщение с таким id
+  if (document.querySelector(`[data-id="${msg.id}"]`)) return;
+
+  const isMe = msg.from === currentUser.uid;
+  let user = isMe ? currentUser : null;
+  if (!isMe) {
+    const s = await db.ref('users/' + msg.from).once('value');
+    user = s.val() || { name: msg.from, nick: msg.from, color: '#888' };
+  }
+  const showSender = !isMe && (activeChat.type === 'group' || activeChat.type === 'channel');
+  const color = user.color || getColorFromNick(user.nick || '');
+
+  const el = document.createElement('div');
+  el.className = 'message-wrapper ' + (isMe ? 'out' : 'in');
+  el.dataset.id = msg.id;
+  el.dataset.at = msg.at; // сохраняем timestamp для сортировки
+
+  let bodyHtml = '';
+
+  // Блок ответа (replyTo)
+  if (msg.replyTo) {
+    const replySnap = await db.ref('users/' + msg.replyTo.from).once('value');
+    const replyUser = replySnap.val() || { name: 'Пользователь' };
+    bodyHtml += `
+      <div class="reply-to" onclick="jumpToMessage('${msg.replyTo.id}')">
+        <div class="reply-to-title">В ответ ${replyUser.name}</div>
+        <div class="reply-to-text">${escapeHtml(msg.replyTo.text || '')}</div>
+      </div>
+    `;
+  }
+
+  // Текст с преобразованием ссылок
+  if (msg.text) {
+    let text = escapeHtml(msg.text);
+    const urlRegex = /(https?:\/\/[^\s]+)|(\b[a-zA-Z0-9][a-zA-Z0-9\-]*\.(?:com|org|ru|io|net|edu|gov|mil|biz|info|name|pro|co|me|tv|cc|ws|xyz|site|online|tech|store|blog|app|dev|club|space|press|wiki|media|network|world|today|live|news|agency|email|shop|buzz|loan|work|jobs|mobi|tel|travel|aero|asia|cat|coop|jobs|museum|post|tel|xxx|[a-z]{2,6})(?::\d+)?(?:\/[^\s]*)?\b)/gi;
+    text = text.replace(urlRegex, '<a href="$1$2" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">$1$2</a>');
+    bodyHtml += text;
+  }
+
+  // Файл
+  if (msg.file && msg.file.url) {
+    const f = msg.file;
+    if (f.isImage) {
+      bodyHtml += `
+        <div class="message-file image">
+          <a href="${f.url}" target="_blank" rel="noopener">
+            <img src="${f.url}" alt="${escapeHtml(f.name || 'image')}">
+          </a>
+          <div class="message-file-name">${escapeHtml(f.name || '')}</div>
+        </div>`;
+    } else {
+      bodyHtml += `
+        <div class="message-file">
+          <a href="${f.url}" target="_blank" rel="noopener">📎 ${escapeHtml(f.name || 'файл')}</a>
+        </div>`;
+    }
+  }
+
+  // Метка редактирования
+  if (msg.edited) {
+    bodyHtml += `<span class="edited-mark">(изменено)</span>`;
+  }
+
+  el.innerHTML = `
+    ${!isMe ? `<div class="message-avatar" style="background:${color}">${getInitials(user.name)}</div>` : ''}
+    <div><div class="message-bubble">
+      ${showSender ? `<div class="message-sender">${user.name}</div>` : ''}
+      ${bodyHtml}
+      <div class="message-time">${msg.time || ''}${isMe ? ' ✓✓' : ''}</div>
+    </div></div>
+    ${isMe ? `<div class="message-avatar" style="background:${currentUser.color || getColorFromNick(currentUser.nick)}">${getInitials(currentUser.name)}</div>` : ''}`;
+
+  el.oncontextmenu = (e) => { e.preventDefault(); showContextMenu(e, msg, isMe); };
+
+  // Определяем, был ли пользователь внизу до вставки
+  const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+
+  // Вставляем сообщение в правильное место по времени (от более старых к новым)
+  let insertBefore = null;
+  const children = container.children;
+  for (let i = children.length - 1; i >= 0; i--) {
+    const child = children[i];
+    const childAt = child.dataset.at;
+    if (childAt && parseInt(childAt) > msg.at) {
+      insertBefore = child;
+    } else {
+      break;
+    }
+  }
+
+  if (insertBefore) {
+    container.insertBefore(el, insertBefore);
+  } else {
+    container.appendChild(el);
+  }
+
+  // Прокручиваем вниз, если нужно (своё сообщение или были внизу)
+  if (scrollIfNearBottom && (isMe || wasAtBottom)) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
 
     function jumpToMessage(messageId) {
   const el = document.querySelector(`[data-id="${messageId}"]`);
