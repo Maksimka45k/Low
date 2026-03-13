@@ -335,6 +335,70 @@
     justify-content: center;
   }
 }
+.reply-preview {
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  position: relative;
+}
+.reply-preview-content {
+  display: flex;
+  flex-direction: column;
+}
+.reply-preview-close {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.reply-preview-title {
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.reply-preview-text {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90%;
+}
+
+.reply-to {
+  background: rgba(108,92,231,0.1);
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.reply-to-title {
+  font-weight: 600;
+  color: var(--accent);
+}
+.reply-to-text {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edited-mark {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 6px;
+  font-style: italic;
+}
+
+#cancel-edit-btn {
+  margin-right: 4px;
+}
   </style>
 </head>
 <body>
@@ -443,9 +507,7 @@
             <textarea class="message-input" id="message-input" placeholder="Написать..." rows="1"
               onkeydown="handleMessageKey(event)" oninput="autoResize(this)"></textarea>
           </div>
-          <input type="file" id="file-input" class="hidden"
-            accept="image/png,image/jpeg,image/jpg,video/*,audio/*,application/pdf,.txt,.zip,.rar"
-            onchange="handleFileSelect(this.files[0])">
+          <input type="file" id="file-input" class="hidden" accept="image/png,image/jpeg,image/jpg,video/*,audio/*,application/pdf,.txt,.zip,.rar" onchange="handleFileSelect(this.files[0])">
           <button class="btn-icon" style="font-size:20px;color:var(--accent)" onclick="sendMessage()">➤</button>
         </div>
       </div>
@@ -808,6 +870,8 @@
     // ── Globals ──────────────────────────────────────────────────────────────
     let currentUser = null;
     let activeChat = null;
+    let replyingTo = null;          // { id, from, text, file? }
+    let editingMessage = null;      // { id, text }
     // Each listener stored as { ref, handler } so we can properly call ref.off(event, handler)
     let chatsListener   = null;   // { ref, handler }
     let messagesListener = null;  // cleanup fn
@@ -1166,9 +1230,66 @@
       el.className = 'message-wrapper ' + (isMe ? 'out' : 'in');
       el.dataset.id = msg.id;
       let bodyHtml = '';
+      // Если есть replyTo
+if (msg.replyTo) {
+  // Получаем имя автора исходного сообщения (асинхронно, но лучше сохранять при отправке)
+  const replySnap = await db.ref('users/' + msg.replyTo.from).once('value');
+  const replyUser = replySnap.val() || { name: 'Пользователь' };
+  bodyHtml += `
+    <div class="reply-to" onclick="jumpToMessage('${msg.replyTo.id}')">
+      <div class="reply-to-title">В ответ ${replyUser.name}</div>
+      <div class="reply-to-text">${escapeHtml(msg.replyTo.text || '')}</div>
+    </div>
+  `;
+}
+
+// Основной текст
+if (msg.text) {
+  // здесь код преобразования ссылок, который мы уже добавили ранее
+  // ... (вставьте ваш текущий код обработки ссылок)
+}
+
+// Если есть файл
+if (msg.file && msg.file.url) {
+  // ... ваш текущий код для файла
+}
+
+// Если сообщение редактировалось
+if (msg.edited) {
+  bodyHtml += `<span class="edited-mark">(изменено)</span>`;
+}
       if (msg.text) {
-        bodyHtml += escapeHtml(msg.text);
-      }
+  // Регулярное выражение для поиска ссылок:
+  // 1. С протоколом http:// или https://
+  // 2. Домены вида example.com, site.org (с точкой и доменной зоной из списка)
+  const urlRegex = /(https?:\/\/[^\s]+)|(\b[a-zA-Z0-9][a-zA-Z0-9\-]*\.(?:com|org|ru|io|net|edu|gov|mil|biz|info|name|pro|co|me|tv|cc|ws|xyz|site|online|tech|store|blog|app|dev|club|space|press|wiki|media|network|world|today|live|news|agency|email|shop|buzz|loan|work|jobs|mobi|tel|travel|aero|asia|cat|coop|jobs|museum|post|tel|xxx|[a-z]{2,6})(?::\d+)?(?:\/[^\s]*)?\b)/gi;
+
+  let parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlRegex.exec(msg.text)) !== null) {
+    // Экранируем обычный текст до найденной ссылки
+    parts.push(escapeHtml(msg.text.substring(lastIndex, match.index)));
+
+    let url = match[0];
+    let href = url;
+
+    // Если нет протокола, добавляем https://
+    if (!url.match(/^https?:\/\//i)) {
+      href = 'https://' + url;
+    }
+
+    // Вставляем кликабельную ссылку (сам url показываем как есть, но экранируем)
+    parts.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">${escapeHtml(url)}</a>`);
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Добавляем остаток текста после последней ссылки
+  parts.push(escapeHtml(msg.text.substring(lastIndex)));
+  bodyHtml += parts.join('');
+}
       if (msg.file && msg.file.url) {
         const f = msg.file;
         if (f.isImage) {
@@ -1201,76 +1322,105 @@
       }
     }
 
+    function jumpToMessage(messageId) {
+  const el = document.querySelector(`[data-id="${messageId}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Можно добавить временную подсветку
+    el.style.transition = 'background 0.5s';
+    el.style.background = 'rgba(108,92,231,0.2)';
+    setTimeout(() => el.style.background = '', 1000);
+  }
+}
+
     async function sendMessage() {
-      const input = document.getElementById('message-input');
-      const text = input.value.trim();
-      if (!activeChat) return;
-      if (!text && !selectedFile) return;
+  const input = document.getElementById('message-input');
+  const text = input.value.trim();
+  if (!activeChat) return;
 
-      let fileData = null;
-      if (selectedFile) {
-        try {
-          const maxSize = 15 * 1024 * 1024; // 15MB
-          if (selectedFile.size > maxSize) {
-            showToast('Файл слишком большой', 'Максимум 15 MB', 'error');
-            return;
-          }
-          const path = `uploads/${currentUser.uid}/${Date.now()}_${selectedFile.name}`;
-          const snap = await storage.ref(path).put(selectedFile);
-          const url = await snap.ref.getDownloadURL();
-          fileData = {
-            name: selectedFile.name,
-            size: selectedFile.size,
-            type: selectedFile.type,
-            url,
-            isImage: selectedFile.type.startsWith('image/')
-          };
-        } catch (e) {
-          console.error('upload error', e);
-          showToast('Ошибка загрузки файла', e.message || '', 'error');
-          return;
-        } finally {
-          if (selectedFilePreviewUrl) {
-            URL.revokeObjectURL(selectedFilePreviewUrl);
-            selectedFilePreviewUrl = null;
-          }
-          selectedFile = null;
-          const fp = document.getElementById('file-preview');
-          if (fp) {
-            fp.classList.add('hidden');
-            fp.innerHTML = '';
-          }
-          const fi = document.getElementById('file-input');
-          if (fi) fi.value = '';
-        }
-      }
-
-      input.value = '';
-      input.style.height = '';
-      const msg = {
-        from: currentUser.uid,
-        text: text || '',
-        file: fileData || null,
-        time: getCurrentTime(),
-        at: firebase.database.ServerValue.TIMESTAMP
-      };
-      await db.ref('messages/' + activeChat.id).push(msg);
-
-      let preview;
-      if (text) {
-        preview = currentUser.name + ': ' + text.slice(0, 45) + (text.length > 45 ? '...' : '');
-      } else if (fileData) {
-        preview = currentUser.name + ': ' + (fileData.isImage ? '📎 Изображение' : `📎 Файл ${fileData.name}`);
-      } else {
-        preview = '';
-      }
-      await db.ref('chats/' + activeChat.id).update({ lastMsg: preview, lastMsgTime: getCurrentTime(), lastAt: firebase.database.ServerValue.TIMESTAMP });
-      const members = activeChat.participants || activeChat.members || {};
-      for (const uid of Object.keys(members)) {
-        if (uid !== currentUser.uid) db.ref('chats/' + activeChat.id + '/unread/' + uid).transaction(v => (v || 0) + 1);
-      }
+  // Режим редактирования
+  if (editingMessage) {
+    if (!text) {
+      cancelEditing();
+      return;
     }
+    // Обновляем сообщение в базе
+    await db.ref('messages/' + activeChat.id + '/' + editingMessage.id).update({
+      text: text,
+      edited: true,
+      editedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    cancelEditing();
+    return;
+  }
 
+  // Обычная отправка (с возможным ответом)
+  if (!text && !selectedFile) return;
+
+  let fileData = null;
+  if (selectedFile) {
+    try {
+      const maxSize = 15 * 1024 * 1024;
+      if (selectedFile.size > maxSize) {
+        showToast('Файл слишком большой', 'Максимум 15 MB', 'error');
+        return;
+      }
+      const path = `uploads/${currentUser.uid}/${Date.now()}_${selectedFile.name}`;
+      const snap = await storage.ref(path).put(selectedFile);
+      const url = await snap.ref.getDownloadURL();
+      fileData = {
+        name: selectedFile.name,
+        size: selectedFile.size,
+        type: selectedFile.type,
+        url,
+        isImage: selectedFile.type.startsWith('image/')
+      };
+    } catch (e) {
+      console.error('upload error', e);
+      showToast('Ошибка загрузки файла', e.message || '', 'error');
+      return;
+    } finally {
+      resetFileSelection();
+    }
+  }
+
+  input.value = '';
+  input.style.height = '';
+
+  const msg = {
+    from: currentUser.uid,
+    text: text || '',
+    file: fileData || null,
+    time: getCurrentTime(),
+    at: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  // Если есть ответ, добавляем поле replyTo
+  if (replyingTo) {
+    msg.replyTo = {
+      id: replyingTo.id,
+      from: replyingTo.from,
+      text: replyingTo.text
+    };
+    cancelReply();
+  }
+
+  await db.ref('messages/' + activeChat.id).push(msg);
+
+  let preview;
+  if (text) {
+    preview = currentUser.name + ': ' + text.slice(0, 45) + (text.length > 45 ? '...' : '');
+  } else if (fileData) {
+    preview = currentUser.name + ': ' + (fileData.isImage ? '📎 Изображение' : `📎 Файл ${fileData.name}`);
+  } else {
+    preview = '';
+  }
+  await db.ref('chats/' + activeChat.id).update({ lastMsg: preview, lastMsgTime: getCurrentTime(), lastAt: firebase.database.ServerValue.TIMESTAMP });
+  const members = activeChat.participants || activeChat.members || {};
+  for (const uid of Object.keys(members)) {
+    if (uid !== currentUser.uid) db.ref('chats/' + activeChat.id + '/unread/' + uid).transaction(v => (v || 0) + 1);
+  }
+}
     function handleMessageKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
     function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
     function filterChats() { loadChats(); }
@@ -1320,22 +1470,112 @@
     document.addEventListener('click', () => ctxMenu.classList.remove('show'));
 
     function showContextMenu(e, msg, isMe) {
-      ctxMenu.innerHTML = '';
-      const items = [
-        { icon: '📋', label: 'Копировать', action: () => copyMessage(msg.id) },
-        ...(isMe ? [{ icon: '🗑', label: 'Удалить', action: () => deleteMessage(msg.id), danger: true }] : [])
-      ];
-      items.forEach(item => {
-        const el = document.createElement('div');
-        el.className = 'context-item' + (item.danger ? ' danger' : '');
-        el.innerHTML = `${item.icon} ${item.label}`;
-        el.onclick = () => { item.action(); ctxMenu.classList.remove('show'); };
-        ctxMenu.appendChild(el);
-      });
-      ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
-      ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 120) + 'px';
-      ctxMenu.classList.add('show');
-    }
+  ctxMenu.innerHTML = '';
+  const items = [];
+
+  // Ответить (для всех)
+  items.push({ icon: '↩️', label: 'Ответить', action: () => setReplyTo(msg) });
+
+  // Редактировать (только свои и только если есть текст)
+  if (isMe && msg.text) {
+    items.push({ icon: '✎', label: 'Редактировать', action: () => startEditing(msg) });
+  }
+
+  // Копировать
+  items.push({ icon: '📋', label: 'Копировать', action: () => copyMessage(msg.id) });
+
+  // Удалить (только свои)
+  if (isMe) {
+    items.push({ icon: '🗑', label: 'Удалить', action: () => deleteMessage(msg.id), danger: true });
+  }
+
+  items.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'context-item' + (item.danger ? ' danger' : '');
+    el.innerHTML = `${item.icon} ${item.label}`;
+    el.onclick = () => { item.action(); ctxMenu.classList.remove('show'); };
+    ctxMenu.appendChild(el);
+  });
+  ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+  ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 120) + 'px';
+  ctxMenu.classList.add('show');
+}
+
+function setReplyTo(msg) {
+  replyingTo = {
+    id: msg.id,
+    from: msg.from,
+    text: msg.text || (msg.file ? '📎 Файл' : ''),
+    fromName: msg.fromName // нужно будет получать при отображении, но пока просто используем имя из базы при отправке
+  };
+  editingMessage = null; // сбрасываем редактирование
+  showReplyPreview();
+}
+
+function startEditing(msg) {
+  // Устанавливаем сообщение, которое редактируем
+  editingMessage = {
+    id: msg.id,
+    text: msg.text
+  };
+  // Сбрасываем режим ответа, если он был активен
+  replyingTo = null;
+  // Убираем предпросмотр ответа, если он есть
+  const replyPreview = document.getElementById('reply-preview');
+  if (replyPreview) replyPreview.remove();
+
+  // Заполняем поле ввода текстом сообщения
+  const input = document.getElementById('message-input');
+  input.value = msg.text;
+  input.focus();
+  autoResize(input); // подгоняем высоту textarea
+
+  // Показываем кнопку отмены редактирования (крестик)
+  const cancelBtn = document.getElementById('cancel-edit-btn');
+  if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+
+  // Меняем иконку кнопки отправки на галочку (сохранить)
+  const sendBtn = document.querySelector('.input-area .btn-icon:last-child');
+  if (sendBtn) sendBtn.textContent = '✔';
+}
+
+function cancelEditing() {
+  editingMessage = null;
+  document.getElementById('message-input').value = '';
+  document.getElementById('cancel-edit-btn').style.display = 'none';
+  document.querySelector('.input-area .btn-icon:last-child').textContent = '➤';
+}
+
+function showReplyPreview() {
+  if (!replyingTo) {
+    document.getElementById('reply-preview')?.remove();
+    return;
+  }
+  // Создаём элемент предпросмотра ответа
+  let preview = document.getElementById('reply-preview');
+  if (!preview) {
+    preview = document.createElement('div');
+    preview.id = 'reply-preview';
+    preview.className = 'reply-preview';
+    document.querySelector('.input-area').insertBefore(preview, document.getElementById('file-preview').nextSibling);
+  }
+  // Получаем имя автора (асинхронно, но можно сохранить при клике)
+  db.ref('users/' + replyingTo.from).once('value').then(snap => {
+    const user = snap.val() || { name: 'Пользователь' };
+    preview.innerHTML = `
+      <div class="reply-preview-content">
+        <span class="reply-preview-close" onclick="cancelReply()">✕</span>
+        <div class="reply-preview-title">Ответ ${user.name}</div>
+        <div class="reply-preview-text">${escapeHtml(replyingTo.text)}</div>
+      </div>
+    `;
+  });
+}
+
+function cancelReply() {
+  replyingTo = null;
+  document.getElementById('reply-preview')?.remove();
+}
 
     async function copyMessage(id) {
       const s = await db.ref('messages/' + activeChat.id + '/' + id).once('value');
