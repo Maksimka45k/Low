@@ -422,7 +422,7 @@
       <div id="chat-view">
         <div class="chat-header">
           <div class="chat-header">
-            <button class="btn-icon back-button" onclick="mobileBackToChats()" style="display:none;">←</button>
+            <button class="btn-icon back-button" onclick="mobileBackToChats()" aria-label="Назад">←</button>
             <div class="avatar small" id="chat-avatar"></div>
             ...
           </div>
@@ -2190,50 +2190,77 @@
   }
 });
 
-    // ========== МОБИЛЬНАЯ НАВИГАЦИЯ (ДОБАВЛЕНО) ==========
-    let isMobile = window.innerWidth <= 768;
-    window.addEventListener('resize', () => {
-      isMobile = window.innerWidth <= 768;
-      if (!isMobile) {
-        document.getElementById('sidebar').classList.remove('hidden-mobile');
-        //document.getElementById('main').classList.remove('fullscreen');
-      } else {
-        if (!activeChat) {
-          document.getElementById('sidebar').classList.remove('hidden-mobile');
-        }
-      }
-    });
+// ========== МОБИЛЬНАЯ НАВИГАЦИЯ ==========
+let isMobile = window.innerWidth <= 768;
 
-    function mobileBackToChats() {
-      if (isMobile) {
-        document.getElementById('sidebar').classList.remove('hidden-mobile');
-        document.getElementById('chat-view').style.display = 'none';
-        document.getElementById('empty-state').style.display = 'flex';
-        activeChat = null;
-      }
+// При загрузке на мобильных: убираем десктопный hidden, добавляем мобильный скрывающий класс
+if (isMobile) {
+  const settingsEl = document.getElementById('settings');
+  if (settingsEl) {
+    settingsEl.classList.remove('hidden');
+    settingsEl.classList.add('hidden-mobile');
+  }
+}
+
+window.addEventListener('resize', () => {
+  isMobile = window.innerWidth <= 768;
+  const settingsEl = document.getElementById('settings');
+  const sidebarEl = document.getElementById('sidebar');
+
+  if (isMobile) {
+    // Перешли на мобильные
+    settingsEl.classList.remove('hidden');
+    settingsEl.classList.add('hidden-mobile');
+    // Показываем сайдбар, если не в чате?
+    // Лучше опираться на activeChat
+    if (!activeChat) {
+      sidebarEl.classList.remove('hidden-mobile');
+    } else {
+      sidebarEl.classList.add('hidden-mobile');
     }
+  } else {
+    // Перешли на десктоп
+    settingsEl.classList.remove('hidden-mobile');
+    // Возвращаем управление классом hidden: если настройки были открыты на мобильных (нет hidden-mobile), то на десктопе они станут видны.
+    // Но проще всего просто закрыть настройки при переходе на десктоп, чтобы не путаться.
+    settingsEl.classList.add('hidden'); // скрываем настройки (десктопное состояние по умолчанию)
+    sidebarEl.classList.remove('hidden-mobile'); // на десктопе сайдбар всегда виден
+  }
+});
 
-    const originalOpenChat = openChat;
-    openChat = async function(chatId) {
-      await originalOpenChat(chatId);
-      if (isMobile) {
-        document.getElementById('sidebar').classList.add('hidden-mobile');
-        document.getElementById('chat-view').style.display = 'flex';
-        document.getElementById('empty-state').style.display = 'none';
-      }
-    };
+function mobileBackToChats() {
+  if (isMobile) {
+    document.getElementById('sidebar').classList.remove('hidden-mobile');
+    document.getElementById('chat-view').style.display = 'none';
+    document.getElementById('empty-state').style.display = 'flex';
+    activeChat = null;
+  }
+}
 
-    const originalToggleSettings = toggleSettings;
-    toggleSettings = function() {
-      if (isMobile) {
-        const settings = document.getElementById('settings');
-        settings.classList.toggle('hidden-mobile');
-        document.body.style.overflow = settings.classList.contains('hidden-mobile') ? '' : 'hidden';
-      } else {
-        originalToggleSettings();
-      }
-    };
-    // ========== КОНЕЦ МОБИЛЬНОЙ НАВИГАЦИИ ==========
+// Сохраняем оригинальные функции
+const originalOpenChat = window.openChat;
+window.openChat = async function(chatId) {
+  await originalOpenChat(chatId);
+  if (isMobile) {
+    document.getElementById('sidebar').classList.add('hidden-mobile');
+    document.getElementById('chat-view').style.display = 'flex';
+    document.getElementById('empty-state').style.display = 'none';
+  }
+};
+
+const originalToggleSettings = window.toggleSettings;
+window.toggleSettings = function() {
+  if (isMobile) {
+    const settings = document.getElementById('settings');
+    // Убираем hidden, чтобы он не мешал (он уже должен быть удалён)
+    settings.classList.remove('hidden');
+    settings.classList.toggle('hidden-mobile');
+    document.body.style.overflow = settings.classList.contains('hidden-mobile') ? '' : 'hidden';
+  } else {
+    originalToggleSettings();
+  }
+};
+// ========== КОНЕЦ МОБИЛЬНОЙ НАВИГАЦИИ ==========
 
   </script>
 
