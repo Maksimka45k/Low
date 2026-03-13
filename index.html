@@ -221,6 +221,120 @@
     .message-file.image { padding: 4px; }
     .message-file.image img { max-width: 260px; max-height: 260px; border-radius: 12px; display: block; }
     .message-file-name { margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
+    /* ========== МОБИЛЬНАЯ АДАПТАЦИЯ ========== */
+@media (max-width: 768px) {
+  /* Скрываем сайдбар по умолчанию, показываем его только при активном классе */
+  #sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+  }
+  #sidebar.hidden-mobile {
+    transform: translateX(-100%);
+  }
+
+  /* Основная область на весь экран */
+  #main {
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: var(--bg);
+    z-index: 90;
+  }
+
+  /* Чат-вью на весь экран */
+  #chat-view {
+    height: 100%;
+  }
+
+  /* Кнопка "Назад" в шапке чата */
+  .chat-header .back-button {
+    display: inline-flex;
+    margin-right: 8px;
+    font-size: 24px;
+  }
+
+  /* Скрываем пустое состояние, если чат активен */
+  #empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  /* Панель настроек на весь экран */
+  #settings {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 200;
+    background: var(--bg-secondary);
+    overflow-y: auto;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+  }
+  #settings.hidden-mobile {
+    transform: translateX(100%);
+  }
+
+  /* Модальные окна на мобильных занимают почти весь экран */
+  .modal {
+    width: 95%;
+    max-width: none;
+    padding: 20px;
+  }
+
+  /* Увеличиваем кликабельные элементы */
+  .chat-item {
+    padding: 16px 12px;
+  }
+  .btn-icon {
+    padding: 12px;
+    font-size: 20px;
+  }
+  .message-wrapper {
+    max-width: 85%;
+  }
+  .message-bubble {
+    font-size: 16px; /* Чуть крупнее для чтения */
+  }
+  .message-input {
+    font-size: 16px; /* Предотвращает зум при фокусе на iOS */
+  }
+
+  /* Скрываем десктопные элементы */
+  .back-button {
+    display: none; /* По умолчанию скрыта, покажем через JS */
+  }
+}
+
+/* Для очень маленьких экранов (до 480px) */
+@media (max-width: 480px) {
+  .auth-box {
+    width: 90%;
+    padding: 30px 20px;
+  }
+  .call-videos {
+    flex-direction: column;
+  }
+  .video-box {
+    width: 100%;
+    height: 200px;
+  }
+  .call-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
   </style>
 </head>
 <body>
@@ -307,6 +421,11 @@
       </div>
       <div id="chat-view">
         <div class="chat-header">
+          <div class="chat-header">
+            <button class="btn-icon back-button" onclick="mobileBackToChats()" style="display:none;">←</button>
+            <div class="avatar small" id="chat-avatar"></div>
+            ...
+          </div>
           <div class="avatar small" id="chat-avatar"></div>
           <div class="chat-header-info">
             <div class="chat-header-name" id="chat-name"></div>
@@ -2036,41 +2155,88 @@
         </div>`;
     }
 
-    // ── Auth State ────────────────────────────────────────────────────────────
-    auth.onAuthStateChanged(async (user) => {
-      document.getElementById('loading').style.display = 'none';
-      if (user) {
-        let snap;
-        try {
-          snap = await db.ref('users/' + user.uid).once('value');
-        } catch (err) {
-          console.error('DB access error:', err);
-          if (err.code === 'PERMISSION_DENIED') {
-            showPermissionError();
-          }
-          return;
-        }
-        if (!snap.exists()) { auth.signOut(); return; }
-        currentUser = snap.val();
-        document.getElementById('auth').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        await initializeApp();
-        // Если страница открыта по ссылке на канал — подключаем/открываем его
-        const params = new URLSearchParams(location.search);
-        if (params.get('channel')) {
-          joinChannelFromLink(params.get('channel'));
-        }
+        // ── Auth State ────────────────────────────────────────────────────────────
+        auth.onAuthStateChanged(async (user) => {
+  document.getElementById('loading').style.display = 'none';
+  if (user) {
+    let snap;
+    try {
+      snap = await db.ref('users/' + user.uid).once('value');
+    } catch (err) {
+      console.error('DB access error:', err);
+      if (err.code === 'PERMISSION_DENIED') {
+        showPermissionError();
+      }
+      return;
+    }
+    if (!snap.exists()) { auth.signOut(); return; }
+    currentUser = snap.val();
+    document.getElementById('auth').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    await initializeApp();
+    // Если страница открыта по ссылке на канал — подключаем/открываем его
+    const params = new URLSearchParams(location.search);
+    if (params.get('channel')) {
+      joinChannelFromLink(params.get('channel'));
+    }
+  } else {
+    currentUser = null; activeChat = null;
+    document.getElementById('auth').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+    ['login-nick','login-password','register-name','register-nick','register-password'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+});
+
+    // ========== МОБИЛЬНАЯ НАВИГАЦИЯ (ДОБАВЛЕНО) ==========
+    let isMobile = window.innerWidth <= 768;
+    window.addEventListener('resize', () => {
+      isMobile = window.innerWidth <= 768;
+      if (!isMobile) {
+        document.getElementById('sidebar').classList.remove('hidden-mobile');
+        //document.getElementById('main').classList.remove('fullscreen');
       } else {
-        currentUser = null; activeChat = null;
-        document.getElementById('auth').classList.remove('hidden');
-        document.getElementById('app').classList.add('hidden');
-        ['login-nick','login-password','register-name','register-nick','register-password'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.value = '';
-        });
+        if (!activeChat) {
+          document.getElementById('sidebar').classList.remove('hidden-mobile');
+        }
       }
     });
+
+    function mobileBackToChats() {
+      if (isMobile) {
+        document.getElementById('sidebar').classList.remove('hidden-mobile');
+        document.getElementById('chat-view').style.display = 'none';
+        document.getElementById('empty-state').style.display = 'flex';
+        activeChat = null;
+      }
+    }
+
+    const originalOpenChat = openChat;
+    openChat = async function(chatId) {
+      await originalOpenChat(chatId);
+      if (isMobile) {
+        document.getElementById('sidebar').classList.add('hidden-mobile');
+        document.getElementById('chat-view').style.display = 'flex';
+        document.getElementById('empty-state').style.display = 'none';
+      }
+    };
+
+    const originalToggleSettings = toggleSettings;
+    toggleSettings = function() {
+      if (isMobile) {
+        const settings = document.getElementById('settings');
+        settings.classList.toggle('hidden-mobile');
+        document.body.style.overflow = settings.classList.contains('hidden-mobile') ? '' : 'hidden';
+      } else {
+        originalToggleSettings();
+      }
+    };
+    // ========== КОНЕЦ МОБИЛЬНОЙ НАВИГАЦИИ ==========
+
   </script>
+
   <!-- Пользовательское соглашение -->
 <div id="tos-modal" class="modal-overlay hidden">
   <div class="modal" style="max-width: 600px;">
