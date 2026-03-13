@@ -189,6 +189,11 @@
     .toast-title { font-family: var(--font-display); font-weight: 700; font-size: 13px; }
     .toast-message { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
+    /* Sidebar tabs */
+    .sidebar-tabs { display: flex; padding: 8px 8px 0; gap: 6px; }
+    .sidebar-tab { flex: 1; padding: 6px 10px; border-radius: 10px; font-family: var(--font-display); font-weight: 600; font-size: 11px; text-align: center; cursor: pointer; color: var(--text-secondary); background: transparent; border: 1px solid transparent; transition: 0.2s; }
+    .sidebar-tab.active { background: var(--bg-tertiary); border-color: var(--border); color: var(--text); }
+
     /* Context Menu */
     .context-menu { position: fixed; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 6px; z-index: 5000; min-width: 160px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; }
     .context-menu.show { display: block; }
@@ -202,6 +207,20 @@
     .member-chip .remove:hover { color: var(--danger); }
     .divider { height: 1px; background: var(--border); margin: 20px 0; }
     .hidden { display: none !important; }
+
+    /* File upload + preview */
+    .file-preview { max-width: 220px; border-radius: 12px; border: 1px dashed var(--border); padding: 8px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+    .file-preview img { max-width: 60px; max-height: 60px; border-radius: 8px; object-fit: cover; }
+    .file-preview-title { font-weight: 600; margin-bottom: 2px; }
+    .file-preview-remove { margin-left: auto; cursor: pointer; color: var(--text-muted); }
+    .file-preview-remove:hover { color: var(--danger); }
+
+    .message-file { margin-top: 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); padding: 6px; background: rgba(0,0,0,0.05); font-size: 11px; }
+    .message-file a { color: var(--accent); text-decoration: none; word-break: break-all; }
+    .message-file a:hover { text-decoration: underline; }
+    .message-file.image { padding: 4px; }
+    .message-file.image img { max-width: 260px; max-height: 260px; border-radius: 12px; display: block; }
+    .message-file-name { margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
   </style>
 </head>
 <body>
@@ -261,6 +280,10 @@
         <button class="btn-icon" onclick="showModal('group-modal')" title="Создать группу">+</button>
         <button class="btn-icon" onclick="toggleSettings()" title="Настройки">⚙</button>
       </div>
+      <div class="sidebar-tabs">
+        <div class="sidebar-tab active" onclick="switchSidebarTab('chats', this)">Чаты</div>
+        <div class="sidebar-tab" onclick="switchSidebarTab('requests', this)">Запросы в друзья</div>
+      </div>
       <div class="search">
         <span class="search-icon">⌕</span>
         <input type="text" class="search-input" id="search-input" placeholder="Поиск..." oninput="filterChats(this.value)">
@@ -294,8 +317,15 @@
         </div>
         <div class="messages" id="messages"></div>
         <div class="input-area">
-          <textarea class="message-input" id="message-input" placeholder="Написать..." rows="1"
-            onkeydown="handleMessageKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="btn-icon" title="Прикрепить файл" onclick="document.getElementById('file-input').click()">📎</button>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+            <div id="file-preview" class="file-preview hidden"></div>
+            <textarea class="message-input" id="message-input" placeholder="Написать..." rows="1"
+              onkeydown="handleMessageKey(event)" oninput="autoResize(this)"></textarea>
+          </div>
+          <input type="file" id="file-input" class="hidden"
+            accept="image/png,image/jpeg,image/jpg,video/*,audio/*,application/pdf,.txt,.zip,.rar"
+            onchange="handleFileSelect(this.files[0])">
           <button class="btn-icon" style="font-size:20px;color:var(--accent)" onclick="sendMessage()">➤</button>
         </div>
       </div>
@@ -574,6 +604,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
   <!-- Main App Script -->
   <script>
@@ -634,6 +665,12 @@
       ".indexOn": ["calleeId", "createdAt"],
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "friendRequests": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null"
+      }
     }
   }
 }</pre>
@@ -646,6 +683,7 @@
     firebase.initializeApp(FIREBASE_CONFIG);
     const auth = firebase.auth();
     const db = firebase.database();
+    const storage = firebase.storage();
 
     // ── Globals ──────────────────────────────────────────────────────────────
     let currentUser = null;
@@ -659,6 +697,10 @@
     let callState = null;
     let callTimer = null;
     let selectedMembers = [];
+    let selectedFile = null;
+    let selectedFilePreviewUrl = null;
+    let sidebarTab = 'chats';
+    let friendRequestsListener = null;
 
     const COLORS = ['#6c5ce7', '#00d68f', '#f7c948', '#ff4d6d', '#339af0', '#b197fc', '#ff922b'];
     const ICE_SERVERS = {
@@ -781,6 +823,28 @@
       }
     }
 
+    // ── Sidebar tabs: чаты / запросы ─────────────────────────────────────────
+    function switchSidebarTab(tab, el) {
+      sidebarTab = tab;
+      document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+      if (el) el.classList.add('active');
+      const list = document.getElementById('chats-list');
+      list.innerHTML = '';
+      if (tab === 'chats') {
+        if (friendRequestsListener) {
+          friendRequestsListener.ref.off('value', friendRequestsListener.handler);
+          friendRequestsListener = null;
+        }
+        loadChats();
+      } else if (tab === 'requests') {
+        if (chatsListener) {
+          chatsListener.ref.off('value', chatsListener.handler);
+          chatsListener = null;
+        }
+        loadFriendRequests();
+      }
+    }
+
     function detachAllListeners() {
       if (messagesListener)  { messagesListener(); messagesListener = null; }
       if (chatsListener)     { chatsListener.ref.off('value', chatsListener.handler); chatsListener = null; }
@@ -825,6 +889,7 @@
     function loadChats() {
       if (chatsListener) { chatsListener.ref.off('value', chatsListener.handler); }
       if (!currentUser) return;
+      if (sidebarTab !== 'chats') return;
       const ref = db.ref('userChats/' + currentUser.uid);
       const handler = async (snapshot) => {
         if (!currentUser || !snapshot) return;
@@ -858,6 +923,46 @@
         }
       };
       chatsListener = { ref, handler };
+      ref.on('value', handler);
+    }
+
+    // ── Friend Requests ───────────────────────────────────────────────────────
+    function loadFriendRequests() {
+      if (!currentUser) return;
+      const list = document.getElementById('chats-list');
+      if (friendRequestsListener) {
+        friendRequestsListener.ref.off('value', friendRequestsListener.handler);
+      }
+      const ref = db.ref('friendRequests/' + currentUser.uid);
+      const handler = async (snapshot) => {
+        if (sidebarTab !== 'requests') return;
+        list.innerHTML = '';
+        if (!snapshot.exists()) {
+          list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Нет запросов в друзья</div>';
+          return;
+        }
+        const requests = snapshot.val();
+        for (const fromUid of Object.keys(requests)) {
+          const data = requests[fromUid];
+          const us = await db.ref('users/' + fromUid).once('value');
+          const u = us.val() || { name: data.fromName || fromUid, nick: data.fromNick || fromUid, color: getColorFromNick(data.fromNick || fromUid) };
+          const color = u.color || getColorFromNick(u.nick);
+          const el = document.createElement('div');
+          el.className = 'chat-item';
+          el.innerHTML = `
+            <div class="avatar" style="background:${color}">${getInitials(u.name)}</div>
+            <div class="chat-info">
+              <div class="chat-name">${u.name}</div>
+              <div class="chat-preview">@${u.nick} хочет добавить вас</div>
+            </div>
+            <div class="chat-meta">
+              <button class="btn btn-primary" style="padding:4px 8px;font-size:11px;margin-bottom:4px" onclick="acceptFriendRequest('${fromUid}')">Принять</button>
+              <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="rejectFriendRequest('${fromUid}')">Отклонить</button>
+            </div>`;
+          list.appendChild(el);
+        }
+      };
+      friendRequestsListener = { ref, handler };
       ref.on('value', handler);
     }
 
@@ -919,12 +1024,7 @@
       const ref = db.ref('messages/' + activeChat.id);
       const container = document.getElementById('messages');
       container.innerHTML = '<div class="date-divider"><span>СЕГОДНЯ</span></div>';
-      ref.limitToLast(50).once('value', snap => {
-        const msgs = [];
-        snap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-        msgs.forEach(m => appendMessage(m));
-      });
-      const handler = ref.limitToLast(1).on('child_added', snap => {
+      const handler = ref.limitToLast(200).on('child_added', snap => {
         const msg = { id: snap.key, ...snap.val() };
         if (!document.querySelector(`[data-id="${msg.id}"]`)) appendMessage(msg);
       });
@@ -945,11 +1045,32 @@
       const el = document.createElement('div');
       el.className = 'message-wrapper ' + (isMe ? 'out' : 'in');
       el.dataset.id = msg.id;
+      let bodyHtml = '';
+      if (msg.text) {
+        bodyHtml += escapeHtml(msg.text);
+      }
+      if (msg.file && msg.file.url) {
+        const f = msg.file;
+        if (f.isImage) {
+          bodyHtml += `
+            <div class="message-file image">
+              <a href="${f.url}" target="_blank" rel="noopener">
+                <img src="${f.url}" alt="${escapeHtml(f.name || 'image')}">
+              </a>
+              <div class="message-file-name">${escapeHtml(f.name || '')}</div>
+            </div>`;
+        } else {
+          bodyHtml += `
+            <div class="message-file">
+              <a href="${f.url}" target="_blank" rel="noopener">📎 ${escapeHtml(f.name || 'файл')}</a>
+            </div>`;
+        }
+      }
       el.innerHTML = `
         ${!isMe ? `<div class="message-avatar" style="background:${color}">${getInitials(user.name)}</div>` : ''}
         <div><div class="message-bubble">
           ${showSender ? `<div class="message-sender">${user.name}</div>` : ''}
-          ${escapeHtml(msg.text)}
+          ${bodyHtml}
           <div class="message-time">${msg.time || ''}${isMe ? ' ✓✓' : ''}</div>
         </div></div>
         ${isMe ? `<div class="message-avatar" style="background:${currentUser.color || getColorFromNick(currentUser.nick)}">${getInitials(currentUser.name)}</div>` : ''}`;
@@ -963,12 +1084,66 @@
     async function sendMessage() {
       const input = document.getElementById('message-input');
       const text = input.value.trim();
-      if (!text || !activeChat) return;
+      if (!activeChat) return;
+      if (!text && !selectedFile) return;
+
+      let fileData = null;
+      if (selectedFile) {
+        try {
+          const maxSize = 15 * 1024 * 1024; // 15MB
+          if (selectedFile.size > maxSize) {
+            showToast('Файл слишком большой', 'Максимум 15 MB', 'error');
+            return;
+          }
+          const path = `uploads/${currentUser.uid}/${Date.now()}_${selectedFile.name}`;
+          const snap = await storage.ref(path).put(selectedFile);
+          const url = await snap.ref.getDownloadURL();
+          fileData = {
+            name: selectedFile.name,
+            size: selectedFile.size,
+            type: selectedFile.type,
+            url,
+            isImage: selectedFile.type.startsWith('image/')
+          };
+        } catch (e) {
+          console.error('upload error', e);
+          showToast('Ошибка загрузки файла', e.message || '', 'error');
+          return;
+        } finally {
+          if (selectedFilePreviewUrl) {
+            URL.revokeObjectURL(selectedFilePreviewUrl);
+            selectedFilePreviewUrl = null;
+          }
+          selectedFile = null;
+          const fp = document.getElementById('file-preview');
+          if (fp) {
+            fp.classList.add('hidden');
+            fp.innerHTML = '';
+          }
+          const fi = document.getElementById('file-input');
+          if (fi) fi.value = '';
+        }
+      }
+
       input.value = '';
       input.style.height = '';
-      const msg = { from: currentUser.uid, text, time: getCurrentTime(), at: firebase.database.ServerValue.TIMESTAMP };
+      const msg = {
+        from: currentUser.uid,
+        text: text || '',
+        file: fileData || null,
+        time: getCurrentTime(),
+        at: firebase.database.ServerValue.TIMESTAMP
+      };
       await db.ref('messages/' + activeChat.id).push(msg);
-      const preview = currentUser.name + ': ' + text.slice(0, 45) + (text.length > 45 ? '...' : '');
+
+      let preview;
+      if (text) {
+        preview = currentUser.name + ': ' + text.slice(0, 45) + (text.length > 45 ? '...' : '');
+      } else if (fileData) {
+        preview = currentUser.name + ': ' + (fileData.isImage ? '📎 Изображение' : `📎 Файл ${fileData.name}`);
+      } else {
+        preview = '';
+      }
       await db.ref('chats/' + activeChat.id).update({ lastMsg: preview, lastMsgTime: getCurrentTime(), lastAt: firebase.database.ServerValue.TIMESTAMP });
       const members = activeChat.participants || activeChat.members || {};
       for (const uid of Object.keys(members)) {
@@ -979,6 +1154,46 @@
     function handleMessageKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
     function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
     function filterChats() { loadChats(); }
+
+    // ── File attach / preview ─────────────────────────────────────────────────
+    function resetFileSelection() {
+      if (selectedFilePreviewUrl) {
+        URL.revokeObjectURL(selectedFilePreviewUrl);
+        selectedFilePreviewUrl = null;
+      }
+      selectedFile = null;
+      const fp = document.getElementById('file-preview');
+      if (fp) {
+        fp.classList.add('hidden');
+        fp.innerHTML = '';
+      }
+      const fi = document.getElementById('file-input');
+      if (fi) fi.value = '';
+    }
+
+    function handleFileSelect(file) {
+      resetFileSelection();
+      if (!file) return;
+      selectedFile = file;
+      const fp = document.getElementById('file-preview');
+      if (!fp) return;
+
+      const isImage = file.type.startsWith('image/') && (file.type.includes('png') || file.type.includes('jpeg') || file.type.includes('jpg'));
+      let inner = `<div>
+        <div class="file-preview-title">${escapeHtml(file.name)}</div>
+        <div>${(file.size / (1024 * 1024)).toFixed(2)} MB</div>
+      </div>
+      <span class="file-preview-remove" onclick="resetFileSelection()">✕</span>`;
+
+      if (isImage) {
+        selectedFilePreviewUrl = URL.createObjectURL(file);
+        inner = `<img src="${selectedFilePreviewUrl}" alt="">
+          ${inner}`;
+      }
+
+      fp.innerHTML = inner;
+      fp.classList.remove('hidden');
+    }
 
     // ── Context Menu ──────────────────────────────────────────────────────────
     const ctxMenu = document.getElementById('context-menu');
@@ -1004,12 +1219,82 @@
 
     async function copyMessage(id) {
       const s = await db.ref('messages/' + activeChat.id + '/' + id).once('value');
-      if (s.exists()) { navigator.clipboard.writeText(s.val().text); showToast('Скопировано', '', 'success'); }
+      if (s.exists()) {
+        const v = s.val();
+        const text = v.text || (v.file && v.file.url) || '';
+        if (text) {
+          navigator.clipboard.writeText(text);
+          showToast('Скопировано', '', 'success');
+        }
+      }
     }
 
     async function deleteMessage(id) { await db.ref('messages/' + activeChat.id + '/' + id).remove(); }
 
-    // ── Create Chats ──────────────────────────────────────────────────────────
+    // ── Create Chats / Friend requests ───────────────────────────────────────
+    async function findOrCleanupDmBetween(uid1, uid2) {
+      // Ищем только по списку чатов первого пользователя, чтобы не трогать корень /chats
+      const userChatsSnap = await db.ref('userChats/' + uid1).once('value');
+      if (!userChatsSnap.exists()) return null;
+      const matches = [];
+      const chatIds = Object.keys(userChatsSnap.val());
+      for (const chatId of chatIds) {
+        const cs = await db.ref('chats/' + chatId).once('value');
+        if (!cs.exists()) continue;
+        const chat = cs.val();
+        if (!chat || chat.type !== 'dm' || !chat.participants) continue;
+        const parts = Object.keys(chat.participants);
+        if (parts.includes(uid1) && parts.includes(uid2)) {
+          matches.push({ id: chatId, ...chat });
+        }
+      }
+      if (!matches.length) return null;
+      // Оставляем самый первый, остальные считаем фантомными и удаляем
+      matches.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      const main = matches[0];
+      for (let i = 1; i < matches.length; i++) {
+        const m = matches[i];
+        await db.ref('messages/' + m.id).remove();
+        await db.ref('chats/' + m.id).remove();
+        // Удаляем из userChats только для двух участников
+        await db.ref('userChats/' + uid1 + '/' + m.id).remove();
+        await db.ref('userChats/' + uid2 + '/' + m.id).remove();
+      }
+      // Убеждаемся, что чат есть у обоих пользователей
+      await db.ref('userChats/' + uid1 + '/' + main.id).set(true);
+      await db.ref('userChats/' + uid2 + '/' + main.id).set(true);
+      return main.id;
+    }
+
+    async function sendFriendRequestToUid(otherUid) {
+      if (!currentUser || !otherUid) return;
+      if (otherUid === currentUser.uid) {
+        showToast('Ошибка', 'Нельзя добавить себя', 'error');
+        return;
+      }
+      // Если уже есть нормальный dm — открываем его
+      const existingId = await findOrCleanupDmBetween(currentUser.uid, otherUid);
+      if (existingId) {
+        hideModal('dm-modal');
+        openChat(existingId);
+        return;
+      }
+      const uSnap = await db.ref('users/' + otherUid).once('value');
+      const u = uSnap.val();
+      if (!u) {
+        showToast('Ошибка', 'Пользователь не найден', 'error');
+        return;
+      }
+      // Запрос в друзья появляется у другого пользователя
+      await db.ref('friendRequests/' + otherUid + '/' + currentUser.uid).set({
+        fromUid: currentUser.uid,
+        fromNick: currentUser.nick,
+        fromName: currentUser.name,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      showToast('Запрос отправлен', 'Пользователь увидит его во вкладке запросов', 'success');
+    }
+
     async function createDM() {
       const nick = document.getElementById('dm-nick').value.trim().toLowerCase().replace('@', '');
       const errorEl = document.getElementById('dm-error');
@@ -1019,28 +1304,42 @@
       const snap = await db.ref('nickToUid/' + nick).once('value');
       if (!snap.exists()) { errorEl.textContent = 'Пользователь не найден'; return; }
       const otherUid = snap.val();
-      const userChats = await db.ref('userChats/' + currentUser.uid).once('value');
-      if (userChats.exists()) {
-        for (const chatId of Object.keys(userChats.val())) {
-          const cs = await db.ref('chats/' + chatId).once('value');
-          const chat = cs.val();
-          if (chat && chat.type === 'dm' && chat.participants) {
-            const parts = Object.keys(chat.participants);
-            if (parts.includes(currentUser.uid) && parts.includes(otherUid)) {
-              hideModal('dm-modal');
-              openChat(chatId);
-              return;
-            }
-          }
-        }
-      }
-      const ref = db.ref('chats').push();
-      await ref.set({ type: 'dm', participants: { [currentUser.uid]: true, [otherUid]: true }, color: getColorFromNick(nick), createdAt: firebase.database.ServerValue.TIMESTAMP });
-      await db.ref('userChats/' + currentUser.uid + '/' + ref.key).set(true);
-      await db.ref('userChats/' + otherUid + '/' + ref.key).set(true);
+      await sendFriendRequestToUid(otherUid);
       document.getElementById('dm-nick').value = '';
       hideModal('dm-modal');
-      openChat(ref.key);
+    }
+
+    async function acceptFriendRequest(fromUid) {
+      if (!currentUser) return;
+      // Ищем/чистим дублирующиеся dm
+      let chatId = await findOrCleanupDmBetween(currentUser.uid, fromUid);
+      if (!chatId) {
+        // Создаём новый dm
+        const uSnap = await db.ref('users/' + fromUid).once('value');
+        const u = uSnap.val() || {};
+        const ref = db.ref('chats').push();
+        chatId = ref.key;
+        await ref.set({
+          type: 'dm',
+          participants: { [currentUser.uid]: true, [fromUid]: true },
+          color: getColorFromNick(u.nick || ''),
+          createdAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        await db.ref('userChats/' + currentUser.uid + '/' + chatId).set(true);
+        await db.ref('userChats/' + fromUid + '/' + chatId).set(true);
+      }
+      // Удаляем запросы в друзья в обе стороны, если есть
+      await db.ref('friendRequests/' + currentUser.uid + '/' + fromUid).remove();
+      await db.ref('friendRequests/' + fromUid + '/' + currentUser.uid).remove().catch(() => {});
+      showToast('Запрос принят', 'Чат создан', 'success');
+      switchSidebarTab('chats', document.querySelector('.sidebar-tab')); // вернуться к чатам
+      openChat(chatId);
+    }
+
+    async function rejectFriendRequest(fromUid) {
+      if (!currentUser) return;
+      await db.ref('friendRequests/' + currentUser.uid + '/' + fromUid).remove();
+      showToast('Запрос отклонён', '', 'success');
     }
 
     function switchGroupType(type, el) {
@@ -1082,7 +1381,17 @@
       const members = { [currentUser.uid]: true };
       selectedMembers.forEach(m => members[m.uid] = true);
       const ref = db.ref('chats').push();
-      await ref.set({ type, name, desc, color, members, createdAt: firebase.database.ServerValue.TIMESTAMP, lastMsg: type === 'channel' ? '📢 Канал создан' : '👥 Группа создана', lastMsgTime: getCurrentTime() });
+      await ref.set({
+        type,
+        name,
+        desc,
+        color,
+        members,
+        ownerId: currentUser.uid,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        lastMsg: type === 'channel' ? '📢 Канал создан' : '👥 Группа создана',
+        lastMsgTime: getCurrentTime()
+      });
       for (const uid of Object.keys(members)) await db.ref('userChats/' + uid + '/' + ref.key).set(true);
       selectedMembers = [];
       ['group-name', 'group-desc'].forEach(id => document.getElementById(id).value = '');
@@ -1171,22 +1480,52 @@
           <div style="color:var(--text-muted);font-size:12px;margin-top:8px">${u.status || ''}</div></div>`;
       } else {
         const members = activeChat.members || {};
+        const memberCount = Object.keys(members).length;
+        const isChannel = activeChat.type === 'channel';
+        const isOwner = activeChat.ownerId === currentUser.uid;
         html = `<div style="text-align:center;margin-bottom:24px">
           <div class="avatar large ${activeChat.type}" style="background:${info.color};margin:0 auto 16px">${info.initials}</div>
           <div style="font-family:var(--font-display);font-weight:800;font-size:20px">${info.name}</div>
-          <div style="color:var(--text-muted);font-size:12px;margin-top:8px">${activeChat.desc || ''}</div></div>
-          <div class="divider"></div>
-          <div class="section-title">УЧАСТНИКИ (${Object.keys(members).length})</div>`;
-        for (const uid of Object.keys(members)) {
-          const us = await db.ref('users/' + uid).once('value');
-          const u = us.val() || { name: uid, nick: uid, color: '#888' };
-          html += `<div style="display:flex;align-items:center;gap:12px;padding:12px 0">
-            <div class="avatar small" style="background:${u.color || getColorFromNick(u.nick)}">${getInitials(u.name)}</div>
-            <div><div style="font-family:var(--font-display);font-weight:600;font-size:13px">${u.name}</div>
-            <div style="color:var(--text-muted);font-size:11px">@${u.nick}</div></div>
-            ${uid === currentUser.uid ? '<span style="margin-left:auto;color:var(--success);font-size:11px">Вы</span>' : ''}</div>`;
-        }
-        if (activeChat.type === 'group') {
+          <div style="color:var(--text-muted);font-size:12px;margin-top:8px">${activeChat.desc || ''}</div></div>`;
+
+        if (isChannel) {
+          const link = location.origin + location.pathname + '?channel=' + activeChat.id;
+          html += `<div class="divider"></div>
+            <div class="section-title">КАНАЛ</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Поделитесь ссылкой, чтобы другие могли подписаться:</div>
+            ${isOwner ? `<div style="font-size:11px;word-break:break-all;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px">${link}</div>
+            <button class="btn btn-secondary" style="width:100%;margin-bottom:12px" onclick="copyChannelLink()">Скопировать ссылку</button>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">📢 Подписчиков: ${memberCount}</div>`;
+          if (!members[currentUser.uid]) {
+            html += `<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="joinChannelFromLink('${activeChat.id}')">Подписаться на канал</button>`;
+          }
+          html += `<div class="divider"></div>`;
+          if (isOwner) {
+            html += `<div class="section-title">ПОДПИСЧИКИ (${memberCount})</div>`;
+            for (const uid of Object.keys(members)) {
+              const us = await db.ref('users/' + uid).once('value');
+              const u = us.val() || { name: uid, nick: uid, color: '#888' };
+              html += `<div style="display:flex;align-items:center;gap:12px;padding:12px 0">
+                <div class="avatar small" style="background:${u.color || getColorFromNick(u.nick)}">${getInitials(u.name)}</div>
+                <div><div style="font-family:var(--font-display);font-weight:600;font-size:13px">${u.name}</div>
+                <div style="color:var(--text-muted);font-size:11px">@${u.nick}</div></div>
+                ${uid === currentUser.uid ? '<span style="margin-left:auto;color:var(--success);font-size:11px">Вы (администратор)</span>' : `<button class="btn btn-secondary" style="margin-left:auto;padding:4px 8px;font-size:11px" onclick="sendFriendRequestFromChannel('${uid}')">＋ В друзья</button>`}</div>`;
+            }
+          } else {
+            html += `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Список подписчиков виден только администратору</div>`;
+          }
+        } else {
+          html += `<div class="divider"></div>
+            <div class="section-title">УЧАСТНИКИ (${memberCount})</div>`;
+          for (const uid of Object.keys(members)) {
+            const us = await db.ref('users/' + uid).once('value');
+            const u = us.val() || { name: uid, nick: uid, color: '#888' };
+            html += `<div style="display:flex;align-items:center;gap:12px;padding:12px 0">
+              <div class="avatar small" style="background:${u.color || getColorFromNick(u.nick)}">${getInitials(u.name)}</div>
+              <div><div style="font-family:var(--font-display);font-weight:600;font-size:13px">${u.name}</div>
+              <div style="color:var(--text-muted);font-size:11px">@${u.nick}</div></div>
+              ${uid === currentUser.uid ? '<span style="margin-left:auto;color:var(--success);font-size:11px">Вы</span>' : ''}</div>`;
+          }
           html += `<div class="divider"></div>
             <button class="btn btn-secondary" style="width:100%;margin-bottom:8px" onclick="inviteToGroup()">＋ Добавить участника</button>
             <button class="btn btn-danger" style="width:100%" onclick="leaveGroup()">Покинуть группу</button>`;
@@ -1218,6 +1557,37 @@
       document.getElementById('chat-view').style.display = 'none';
       hideModal('info-modal');
       loadChats();
+    }
+
+    function copyChannelLink() {
+      if (!activeChat || activeChat.type !== 'channel') return;
+      const url = location.origin + location.pathname + '?channel=' + activeChat.id;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка скопирована', '', 'success');
+      }).catch(() => {});
+    }
+
+    async function joinChannelFromLink(id) {
+      const channelId = id || (new URLSearchParams(location.search)).get('channel');
+      if (!channelId || !currentUser) return;
+      const snap = await db.ref('chats/' + channelId).once('value');
+      if (!snap.exists()) {
+        showToast('Канал не найден', '', 'error');
+        return;
+      }
+      const chat = snap.val();
+      if (chat.type !== 'channel') {
+        showToast('Это не канал', '', 'error');
+        return;
+      }
+      await db.ref('chats/' + channelId + '/members/' + currentUser.uid).set(true);
+      await db.ref('userChats/' + currentUser.uid + '/' + channelId).set(true);
+      showToast('Вы подписались на канал', '', 'success');
+      openChat(channelId);
+    }
+
+    async function sendFriendRequestFromChannel(uid) {
+      await sendFriendRequestToUid(uid);
     }
 
     // ── Calls ─────────────────────────────────────────────────────────────────
@@ -1305,7 +1675,7 @@
               showToast('Звонок', 'Нет соединения', 'error');
               endCall();
             }
-          }, 8000);
+          }, 15000);
         } else if (pc.connectionState === 'closed') {
           console.log('[caller] peer closed');
           endCall();
@@ -1395,7 +1765,7 @@
               showToast('Звонок', 'Нет соединения', 'error');
               endCall();
             }
-          }, 8000);
+          }, 15000);
         } else if (pc.connectionState === 'closed') {
           endCall();
         }
@@ -1684,6 +2054,11 @@
         document.getElementById('auth').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
         await initializeApp();
+        // Если страница открыта по ссылке на канал — подключаем/открываем его
+        const params = new URLSearchParams(location.search);
+        if (params.get('channel')) {
+          joinChannelFromLink(params.get('channel'));
+        }
       } else {
         currentUser = null; activeChat = null;
         document.getElementById('auth').classList.remove('hidden');
