@@ -584,12 +584,17 @@
           </div>
         </div>
 
-        <div id="audio-section" class="settings-section">
-          <div class="section-title">Устройства</div>
-          <div class="settings-row">
-            <div class="settings-label"><div class="title">Микрофон</div></div>
-            <select id="mic-select"></select>
-          </div>
+<div id="audio-section" class="settings-section">
+  <div class="section-title">Доступ к медиа</div>
+  <button class="btn btn-primary" onclick="requestMediaPermissions()" style="width:100%; margin-bottom: 16px;">
+    Разрешить доступ к микрофону
+  </button>
+  
+  <div class="section-title">Устройства</div>
+  <div class="settings-row">
+    <div class="settings-label"><div class="title">Микрофон</div></div>
+    <select id="mic-select"></select>
+  </div>
           <div class="settings-row">
             <div class="settings-label"><div class="title">Динамики</div></div>
             <select id="speaker-select"></select>
@@ -615,12 +620,17 @@
           <div id="mic-test-level" style="margin-top:12px;font-size:11px;color:var(--text-muted);text-align:center"></div>
         </div>
 
-        <div id="video-section" class="settings-section">
-          <div class="section-title">Камера</div>
-          <div class="settings-row">
-            <div class="settings-label"><div class="title">Устройство</div></div>
-            <select id="camera-select"></select>
-          </div>
+<div id="video-section" class="settings-section">
+  <div class="section-title">Доступ к медиа</div>
+  <button class="btn btn-primary" onclick="requestMediaPermissions()" style="width:100%; margin-bottom: 16px;">
+    Разрешить доступ к камере
+  </button>
+
+  <div class="section-title">Камера</div>
+  <div class="settings-row">
+    <div class="settings-label"><div class="title">Устройство</div></div>
+    <select id="camera-select"></select>
+  </div>
           <div style="width:100%;aspect-ratio:16/9;background:var(--bg-tertiary);border-radius:12px;border:1px solid var(--border);overflow:hidden;margin:16px 0;display:flex;align-items:center;justify-content:center">
             <video id="camera-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:none"></video>
             <div id="camera-placeholder" style="color:var(--text-muted);text-align:center">
@@ -2319,22 +2329,63 @@ function cancelReply() {
     }
 
     // ── Devices ───────────────────────────────────────────────────────────────
-    async function loadDevices() {
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }).catch(() => null);
-        if (s) s.getTracks().forEach(t => t.stop());
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const mic = document.getElementById('mic-select');
-        const spk = document.getElementById('speaker-select');
-        const cam = document.getElementById('camera-select');
-        mic.innerHTML = ''; spk.innerHTML = ''; cam.innerHTML = '';
-        devices.forEach(d => {
-          if (d.kind === 'audioinput') mic.innerHTML += `<option value="${d.deviceId}">${d.label || 'Микрофон'}</option>`;
-          else if (d.kind === 'audiooutput') spk.innerHTML += `<option value="${d.deviceId}">${d.label || 'Динамики'}</option>`;
-          else if (d.kind === 'videoinput') cam.innerHTML += `<option value="${d.deviceId}">${d.label || 'Камера'}</option>`;
-        });
-      } catch(e) {}
+    // Найти функцию loadDevices и добавить перед/после неё requestMediaPermissions
+
+async function requestMediaPermissions() {
+  try {
+    // Запрашиваем сразу и аудио и видео
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    
+    // Если успешно, сразу останавливаем стрим (нам нужны были только права)
+    stream.getTracks().forEach(track => track.stop());
+    
+    showToast('Доступ получен', 'Список устройств обновлен', 'success');
+    
+    // Перезагружаем список устройств, теперь там будут названия вместо "Default"
+    await loadDevices();
+  } catch (e) {
+    console.error('Permission error:', e);
+    showToast('Ошибка доступа', 'Проверьте настройки конфиденциальности браузера', 'error');
+  }
+}
+
+// Обновленная функция loadDevices (добавлен вывод названий устройств)
+async function loadDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mic = document.getElementById('mic-select');
+    const spk = document.getElementById('speaker-select');
+    const cam = document.getElementById('camera-select');
+    
+    if (!mic || !spk || !cam) return;
+
+    mic.innerHTML = ''; spk.innerHTML = ''; cam.innerHTML = '';
+    
+    let hasLabels = false;
+
+    devices.forEach(d => {
+      if (d.label) hasLabels = true; // Проверяем, есть ли названия у устройств
+      
+      const label = d.label || `${d.kind} (${d.deviceId.slice(0, 5)}...)`;
+      
+      if (d.kind === 'audioinput') {
+        mic.innerHTML += `<option value="${d.deviceId}">${label}</option>`;
+      } else if (d.kind === 'audiooutput') {
+        spk.innerHTML += `<option value="${d.deviceId}">${label}</option>`;
+      } else if (d.kind === 'videoinput') {
+        cam.innerHTML += `<option value="${d.deviceId}">${label}</option>`;
+      }
+    });
+
+    // Если ярлыков (label) нет, значит права еще не даны
+    if (!hasLabels && devices.length > 0) {
+        console.log("Устройства найдены, но названия скрыты (нет разрешений)");
     }
+    
+  } catch(e) {
+    console.error('Error loading devices:', e);
+  }
+}
 
     async function testMicrophone() {
       const levelEl = document.getElementById('mic-test-level');
