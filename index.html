@@ -59,20 +59,14 @@
 
     #app { display: flex; height: 100vh; }
     #app.hidden { display: none; }
-    #sidebar { width: var(--sidebar-width); background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    #sidebar { width: var(--sidebar-width); background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; overscroll-behavior: contain; }
     .sidebar-header { padding: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
     .sidebar-logo { font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -1px; background: linear-gradient(135deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; flex: 1; }
     .search { padding: 12px; position: relative; }
     .search-input { width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 10px 10px 10px 32px; color: var(--text); font-family: var(--font-mono); font-size: 12px; outline: none; }
     .search-input:focus { border-color: var(--accent); }
     .search-icon { position: absolute; left: 22px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; }
-    .chats-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-  overscroll-behavior: contain;        /* запрещает pull-to-refresh */
-  -webkit-overflow-scrolling: touch;   /* плавный скролл на iOS */
-}
+    .chats-list { flex: 1; overflow-y: auto; padding: 8px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
     .chat-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; cursor: pointer; transition: 0.2s; margin-bottom: 2px; }
     .chat-item:hover { background: var(--bg-tertiary); }
     .chat-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }
@@ -102,16 +96,7 @@
     .chat-header-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
     .chat-header-status { font-size: 11px; color: var(--text-muted); }
     .chat-header-status.online { color: var(--success); }
-    .messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
+    .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
     .date-divider { text-align: center; margin: 16px 0; }
     .date-divider span { background: var(--bg-tertiary); color: var(--text-muted); font-size: 10px; letter-spacing: 1px; padding: 4px 12px; border-radius: 20px; }
     .message-wrapper { display: flex; gap: 10px; max-width: 70%; }
@@ -440,7 +425,7 @@
       }
     }
 
-    // ---- Остальные функции (авторизация, чаты, звонки) ----
+    // ---- Остальные функции (авторизация, чаты) ----
     function switchTab(tab){ const tabs=document.querySelectorAll('#auth .tabs .tab'); tabs[0].classList.toggle('active',tab==='login'); tabs[1].classList.toggle('active',tab==='register'); document.getElementById('login-form').classList.toggle('hidden',tab!=='login'); document.getElementById('register-form').classList.toggle('hidden',tab!=='register'); }
     async function handleLogin(){ const nick=document.getElementById('login-nick').value.trim().toLowerCase(); const pwd=document.getElementById('login-password').value; const err=document.getElementById('login-error'); err.textContent=''; if(!nick||!pwd){err.textContent='Заполните поля';return;} try{ const snap=await db.ref('nickToUid/'+nick).once('value'); if(!snap.exists()){err.textContent='Пользователь не найден';return;} const uSnap=await db.ref('users/'+snap.val()).once('value'); if(!uSnap.exists()){err.textContent='Ошибка данных';return;} await auth.signInWithEmailAndPassword(uSnap.val().email,pwd); }catch(e){ if(e.code==='auth/wrong-password')err.textContent='Неверный пароль'; else err.textContent='Ошибка: '+e.message; } }
     async function handleRegister(){ const name=document.getElementById('register-name').value.trim(); const nick=document.getElementById('register-nick').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,''); const pwd=document.getElementById('register-password').value; const err=document.getElementById('register-error'); err.textContent=''; if(!name||!nick||!pwd){err.textContent='Заполните поля';return;} if(nick.length<3){err.textContent='Никнейм минимум 3 символа';return;} if(pwd.length<6){err.textContent='Пароль минимум 6 символов';return;} try{ const exists=await db.ref('nickToUid/'+nick).once('value'); if(exists.exists()){err.textContent='Никнейм занят';return;} const cred=await auth.createUserWithEmailAndPassword(nick+'@low.local',pwd); const uid=cred.user.uid; await db.ref('users/'+uid).set({uid,nick,name,email:nick+'@low.local',color:getColorFromNick(nick),status:'',createdAt:firebase.database.ServerValue.TIMESTAMP}); await db.ref('nickToUid/'+nick).set(uid); }catch(e){ err.textContent='Ошибка: '+e.message; } }
@@ -495,20 +480,363 @@
     function copyChannelLink(){ if(!activeChat||activeChat.type!=='channel')return; const url=location.origin+location.pathname+'?channel='+activeChat.id; navigator.clipboard.writeText(url).then(()=>showToast('Ссылка скопирована','','success')).catch(()=>{}); }
     async function joinChannelFromLink(id){ const channelId=id||(new URLSearchParams(location.search)).get('channel'); if(!channelId||!currentUser)return; const snap=await db.ref('chats/'+channelId).once('value'); if(!snap.exists()){showToast('Канал не найден','','error');return;} const chat=snap.val(); if(chat.type!=='channel'){showToast('Это не канал','','error');return;} await db.ref('chats/'+channelId+'/members/'+currentUser.uid).set(true); await db.ref('userChats/'+currentUser.uid+'/'+channelId).set(true); showToast('Вы подписались на канал','','success'); openChat(channelId); }
     async function sendFriendRequestFromChannel(uid){ await sendFriendRequestToUid(uid); }
-    function detachCallListeners(callId){ if(!callId)return; db.ref('calls/'+callId+'/status').off('value'); db.ref('calls/'+callId+'/answer').off('value'); db.ref('calls/'+callId+'/ice_callee').off('child_added'); db.ref('calls/'+callId+'/ice_caller').off('child_added'); }
+    function detachCallListeners(callId){ if(!callId)return; db.ref('calls/'+callId+'/status').off('value'); db.ref('calls/'+callId+'/answer').off('value'); db.ref('calls/'+callId+'/ice_callee').off('child_added'); db.ref('calls/'+callId+'/ice_caller').off('child_added'); db.ref('calls/'+callId+'/renegotiate').off('value'); db.ref('calls/'+callId+'/renegotiateAnswer').off('value'); }
     function listenForCalls(){ if(callsListener)return; if(!currentUser)return; db.ref('.info/serverTimeOffset').once('value',offsetSnap=>{ const offset=offsetSnap.val()||0; const serverNow=Date.now()+offset; const ref=db.ref('calls').orderByChild('createdAt').startAt(serverNow); const handler=(snap)=>{ const call=snap.val(); if(!call)return; if(call.calleeId!==currentUser.uid)return; if(call.status!=='pending')return; if(callState)return; if(incomingCall)return; incomingCall={id:snap.key,...call}; document.getElementById('incoming-name').textContent=call.callerName||'Входящий звонок'; document.getElementById('incoming-type').textContent=call.type==='video'?'📹 Видеозвонок':'📞 Аудиозвонок'; document.getElementById('incoming-call').classList.remove('hidden'); incomingCall.timeout=setTimeout(()=>{ if(incomingCall&&incomingCall.id===snap.key){ db.ref('calls/'+snap.key).remove(); document.getElementById('incoming-call').classList.add('hidden'); incomingCall=null; } },30000); }; callsListener={ref,handler}; ref.on('child_added',handler); }); }
     async function initAudioCall(){ await initCall('audio'); }
     async function initVideoCall(){ await initCall('video'); }
-    async function initCall(type){ if(!activeChat||activeChat.type!=='dm')return; const info=await getChatDisplayInfo(activeChat); if(!info.uid){showToast('Ошибка','Не удалось найти пользователя','error');return;} const callId=db.ref('calls').push().key; const pc=new RTCPeerConnection(ICE_SERVERS); callState={id:callId,type,role:'caller',otherId:info.uid,peer:pc,localStream:null,screenStream:null,muted:false,camOn:type==='video',screenOn:false}; try{ callState.localStream=await navigator.mediaDevices.getUserMedia(type==='video'?{audio:true,video:true}:{audio:true}); callState.localStream.getTracks().forEach(t=>pc.addTrack(t,callState.localStream)); }catch(e){console.warn('Media error:',e);} const iceQueue=[]; pc.onicecandidate=e=>{if(e.candidate)db.ref('calls/'+callId+'/ice_caller').push(e.candidate.toJSON());}; pc.ontrack=e=>setupRemoteStream(e.streams[0]); pc.onconnectionstatechange=()=>{ if(pc.connectionState==='connected')startCallTimer(); else if(pc.connectionState==='failed'){ pc.restartIce(); setTimeout(()=>{ if(callState&&callState.peer===pc&&pc.connectionState==='failed'){showToast('Звонок','Нет соединения','error');endCall();} },15000); } else if(pc.connectionState==='closed')endCall(); }; pc.onicegatheringstatechange=()=>console.log('[caller] iceGathering:',pc.iceGatheringState); pc.oniceconnectionstatechange=()=>console.log('[caller] iceConnection:',pc.iceConnectionState); const offer=await pc.createOffer(); await pc.setLocalDescription(offer); await db.ref('calls/'+callId).set({type,callerId:currentUser.uid,calleeId:info.uid,callerName:currentUser.name,status:'pending',offer:{sdp:offer.sdp,type:offer.type},createdAt:firebase.database.ServerValue.TIMESTAMP}); let callAccepted=false; db.ref('calls/'+callId+'/status').on('value',statusSnap=>{ const s=statusSnap.val(); if(!callState||callState.id!==callId)return; if(s==='active'){callAccepted=true;return;} if(!callAccepted&&s==='rejected'){showToast('Звонок','Отклонён','');endCall();} else if(callAccepted&&(s==='ended'||s===null)){showToast('Звонок','Завершён','');endCall();} }); db.ref('calls/'+callId+'/ice_callee').on('child_added',snap=>{ const c=snap.val(); if(pc.remoteDescription)pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.warn); else iceQueue.push(c); }); db.ref('calls/'+callId+'/answer').on('value',async snap=>{ if(!snap.exists()||pc.signalingState!=='have-local-offer')return; await pc.setRemoteDescription(new RTCSessionDescription(snap.val())); while(iceQueue.length)pc.addIceCandidate(new RTCIceCandidate(iceQueue.shift())).catch(console.warn); }); showCallUI(info.name,type,info.color,info.initials); }
-    async function acceptCall(){ if(!incomingCall)return; clearTimeout(incomingCall.timeout); document.getElementById('incoming-call').classList.add('hidden'); const call=incomingCall; incomingCall=null; const pc=new RTCPeerConnection(ICE_SERVERS); callState={id:call.id,type:call.type,role:'callee',otherId:call.callerId,peer:pc,localStream:null,screenStream:null,muted:false,camOn:call.type==='video',screenOn:false}; try{ callState.localStream=await navigator.mediaDevices.getUserMedia(call.type==='video'?{audio:true,video:true}:{audio:true}); callState.localStream.getTracks().forEach(t=>pc.addTrack(t,callState.localStream)); }catch(e){console.warn('Media error:',e);} const iceQueue=[]; pc.onicecandidate=e=>{if(e.candidate)db.ref('calls/'+call.id+'/ice_callee').push(e.candidate.toJSON());}; pc.ontrack=e=>setupRemoteStream(e.streams[0]); pc.onconnectionstatechange=()=>{ if(pc.connectionState==='connected')startCallTimer(); else if(pc.connectionState==='failed'){ pc.restartIce(); setTimeout(()=>{ if(callState&&callState.peer===pc&&pc.connectionState==='failed'){showToast('Звонок','Нет соединения','error');endCall();} },15000); } else if(pc.connectionState==='closed')endCall(); }; pc.onicegatheringstatechange=()=>console.log('[callee] iceGathering:',pc.iceGatheringState); pc.oniceconnectionstatechange=()=>console.log('[callee] iceConnection:',pc.iceConnectionState); db.ref('calls/'+call.id+'/ice_caller').on('child_added',snap=>{ const c=snap.val(); if(pc.remoteDescription)pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.warn); else iceQueue.push(c); }); await pc.setRemoteDescription(new RTCSessionDescription(call.offer)); while(iceQueue.length)pc.addIceCandidate(new RTCIceCandidate(iceQueue.shift())).catch(console.warn); const answer=await pc.createAnswer(); await pc.setLocalDescription(answer); await db.ref('calls/'+call.id+'/answer').set({sdp:answer.sdp,type:answer.type}); await db.ref('calls/'+call.id+'/status').set('active'); db.ref('calls/'+call.id+'/status').on('value',statusSnap=>{ const s=statusSnap.val(); if(!callState||callState.id!==call.id)return; if(s==='ended'||s===null){showToast('Звонок','Завершён','');endCall();} }); const us=await db.ref('users/'+call.callerId).once('value'); const u=us.val()||{name:call.callerName||'?',color:'#888'}; showCallUI(u.name,call.type,u.color||'#888',getInitials(u.name)); }
-    function rejectCall(){ if(incomingCall){ clearTimeout(incomingCall.timeout); const rejId=incomingCall.id; incomingCall=null; document.getElementById('incoming-call').classList.add('hidden'); db.ref('calls/'+rejId+'/status').set('rejected').then(()=>setTimeout(()=>db.ref('calls/'+rejId).remove().catch(()=>{}),3000)).catch(()=>{}); }else{document.getElementById('incoming-call').classList.add('hidden');} }
-    function setupRemoteStream(stream){ const v=document.getElementById('remote-video'); v.srcObject=stream; v.style.display='block'; document.getElementById('remote-placeholder').style.display='none'; }
-    function showCallUI(name,type,color,initials){ document.getElementById('call-title').textContent=name; document.getElementById('call-status').textContent='СОЕДИНЕНИЕ...'; document.getElementById('remote-label').textContent=name; const rp=document.getElementById('remote-placeholder'); rp.style.background=color; rp.textContent=initials; rp.style.display='flex'; document.getElementById('remote-video').style.display='none'; const lp=document.getElementById('local-placeholder'); lp.style.background=currentUser.color||getColorFromNick(currentUser.nick); lp.textContent=getInitials(currentUser.name); if(type==='video'&&callState.localStream){ const lv=document.getElementById('local-video'); lv.srcObject=callState.localStream; lv.style.display='block'; lp.style.display='none'; document.getElementById('call-videos').style.display='flex'; }else{ document.getElementById('call-videos').style.display='none'; } document.getElementById('call-overlay').classList.remove('hidden'); }
-    function startCallTimer(){ let s=0; callTimer=setInterval(()=>{ s++; const t=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; document.getElementById('call-status').textContent=(callState?.type==='video'?'ВИДЕО':'ЗВОНОК')+' • '+t; },1000); }
-    function endCall(){ clearInterval(callTimer); if(callState){ const cid=callState.id; const savedPeer=callState.peer; const savedLocal=callState.localStream; const savedScreen=callState.screenStream; callState=null; detachCallListeners(cid); if(cid)db.ref('calls/'+cid).remove().catch(()=>{}); savedLocal?.getTracks().forEach(t=>t.stop()); savedScreen?.getTracks().forEach(t=>t.stop()); savedPeer?.close(); } ['local-video','remote-video'].forEach(id=>{ const v=document.getElementById(id); v.srcObject=null; v.style.display='none'; }); document.getElementById('local-placeholder').style.display='flex'; document.getElementById('remote-placeholder').style.display='flex'; document.getElementById('call-overlay').classList.add('hidden'); }
-    function toggleMute(){ if(!callState)return; callState.muted=!callState.muted; callState.localStream?.getAudioTracks().forEach(t=>t.enabled=!callState.muted); const btn=document.getElementById('mute-button'); btn.textContent=callState.muted?'🔇':'🎤'; btn.style.background=callState.muted?'var(--danger)':'var(--bg-tertiary)'; }
-    function toggleCamera(){ if(!callState)return; callState.camOn=!callState.camOn; callState.localStream?.getVideoTracks().forEach(t=>t.enabled=callState.camOn); document.getElementById('local-video').style.display=callState.camOn?'block':'none'; document.getElementById('local-placeholder').style.display=callState.camOn?'none':'flex'; if(callState.camOn)document.getElementById('call-videos').style.display='flex'; }
-    async function toggleScreen(){ if(!callState)return; if(callState.screenOn){ callState.screenStream?.getTracks().forEach(t=>t.stop()); callState.screenStream=null; callState.screenOn=false; const sender=callState.peer?.getSenders().find(s=>s.track?.kind==='video'); const vt=callState.localStream?.getVideoTracks()[0]; if(sender&&vt)sender.replaceTrack(vt); document.getElementById('local-video').srcObject=callState.localStream; }else{ try{ const stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true}); callState.screenStream=stream; callState.screenOn=true; const vt=stream.getVideoTracks()[0]; const sender=callState.peer?.getSenders().find(s=>s.track?.kind==='video'); if(sender)await sender.replaceTrack(vt); const lv=document.getElementById('local-video'); lv.srcObject=stream; lv.style.display='block'; document.getElementById('local-placeholder').style.display='none'; document.getElementById('call-videos').style.display='flex'; vt.onended=()=>{callState.screenOn=false;}; showToast('Экран','Демонстрация начата','success'); }catch(e){showToast('Ошибка','Нет доступа к экрану','error');} } }
+
+    // --- Улучшенные функции звонков (с renegotiation и высоким качеством) ---
+    async function initCall(type) {
+      if (!activeChat || activeChat.type !== 'dm') return;
+      const info = await getChatDisplayInfo(activeChat);
+      if (!info.uid) { showToast('Ошибка', 'Не удалось найти пользователя', 'error'); return; }
+      const callId = db.ref('calls').push().key;
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      callState = {
+        id: callId, type, role: 'caller', otherId: info.uid, peer: pc,
+        localStream: null, screenStream: null, muted: false, camOn: (type === 'video'), screenOn: false
+      };
+      const mediaConstraints = {
+        audio: true,
+        video: (type === 'video') ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } : false
+      };
+      try {
+        callState.localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        callState.localStream.getTracks().forEach(t => pc.addTrack(t, callState.localStream));
+      } catch (e) { console.warn('Media error:', e); }
+
+      pc.onnegotiationneeded = async () => {
+        if (pc.signalingState !== 'stable') return;
+        await renegotiateCall(pc, callId);
+      };
+      pc.onicecandidate = e => { if (e.candidate) db.ref('calls/' + callId + '/ice_caller').push(e.candidate.toJSON()); };
+      pc.ontrack = e => setupRemoteStream(e.streams[0]);
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') startCallTimer();
+        else if (pc.connectionState === 'failed') { pc.restartIce(); setTimeout(() => { if (callState && callState.peer === pc && pc.connectionState === 'failed') endCall(); }, 15000); }
+        else if (pc.connectionState === 'closed') endCall();
+      };
+      // Настройка высокого битрейта
+      pc.getSenders().forEach(sender => {
+        if (sender.track && sender.track.kind === 'video') {
+          const params = sender.getParameters();
+          if (!params.encodings) params.encodings = [{}];
+          params.encodings[0].maxBitrate = 2500000;
+          params.encodings[0].maxFramerate = 30;
+          sender.setParameters(params).catch(console.warn);
+        }
+      });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await db.ref('calls/' + callId).set({
+        type, callerId: currentUser.uid, calleeId: info.uid, callerName: currentUser.name,
+        status: 'pending', offer: { sdp: offer.sdp, type: offer.type },
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+
+      db.ref('calls/' + callId + '/status').on('value', statusSnap => {
+        const s = statusSnap.val();
+        if (!callState || callState.id !== callId) return;
+        if (s === 'active') return;
+        if (s === 'rejected') { showToast('Звонок', 'Отклонён', ''); endCall(); }
+        else if (s === 'ended' || s === null) { showToast('Звонок', 'Завершён', ''); endCall(); }
+      });
+      db.ref('calls/' + callId + '/ice_callee').on('child_added', snap => {
+        const c = snap.val();
+        if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.warn);
+      });
+      db.ref('calls/' + callId + '/answer').on('value', async snap => {
+        if (!snap.exists() || pc.signalingState !== 'have-local-offer') return;
+        await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+      });
+      // Слушаем renegotiate от другого участника
+      db.ref('calls/' + callId + '/renegotiate').on('value', async (snap) => {
+        if (!snap.exists() || !callState || callState.peer !== pc) return;
+        const offer = snap.val();
+        if (pc.signalingState !== 'stable') return;
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await db.ref('calls/' + callId + '/renegotiateAnswer').set({ sdp: answer.sdp, type: answer.type });
+      });
+
+      showCallUI(info.name, type, info.color, info.initials);
+    }
+
+    async function acceptCall() {
+      if (!incomingCall) return;
+      clearTimeout(incomingCall.timeout);
+      document.getElementById('incoming-call').classList.add('hidden');
+      const call = incomingCall;
+      incomingCall = null;
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      callState = {
+        id: call.id, type: call.type, role: 'callee', otherId: call.callerId, peer: pc,
+        localStream: null, screenStream: null, muted: false, camOn: (call.type === 'video'), screenOn: false
+      };
+      const mediaConstraints = {
+        audio: true,
+        video: (call.type === 'video') ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } : false
+      };
+      try {
+        callState.localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        callState.localStream.getTracks().forEach(t => pc.addTrack(t, callState.localStream));
+      } catch (e) { console.warn('Media error:', e); }
+
+      pc.onnegotiationneeded = async () => {
+        if (pc.signalingState !== 'stable') return;
+        await renegotiateCall(pc, call.id);
+      };
+      pc.onicecandidate = e => { if (e.candidate) db.ref('calls/' + call.id + '/ice_callee').push(e.candidate.toJSON()); };
+      pc.ontrack = e => setupRemoteStream(e.streams[0]);
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') startCallTimer();
+        else if (pc.connectionState === 'failed') { pc.restartIce(); setTimeout(() => { if (callState && callState.peer === pc && pc.connectionState === 'failed') endCall(); }, 15000); }
+        else if (pc.connectionState === 'closed') endCall();
+      };
+      pc.getSenders().forEach(sender => {
+        if (sender.track && sender.track.kind === 'video') {
+          const params = sender.getParameters();
+          if (!params.encodings) params.encodings = [{}];
+          params.encodings[0].maxBitrate = 2500000;
+          params.encodings[0].maxFramerate = 30;
+          sender.setParameters(params).catch(console.warn);
+        }
+      });
+
+      db.ref('calls/' + call.id + '/ice_caller').on('child_added', snap => {
+        const c = snap.val();
+        if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.warn);
+      });
+      await pc.setRemoteDescription(new RTCSessionDescription(call.offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await db.ref('calls/' + call.id + '/answer').set({ sdp: answer.sdp, type: answer.type });
+      await db.ref('calls/' + call.id + '/status').set('active');
+      db.ref('calls/' + call.id + '/status').on('value', statusSnap => {
+        const s = statusSnap.val();
+        if (!callState || callState.id !== call.id) return;
+        if (s === 'ended' || s === null) { showToast('Звонок', 'Завершён', ''); endCall(); }
+      });
+      db.ref('calls/' + call.id + '/renegotiate').on('value', async (snap) => {
+        if (!snap.exists() || !callState || callState.peer !== pc) return;
+        const offer = snap.val();
+        if (pc.signalingState !== 'stable') return;
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        await db.ref('calls/' + call.id + '/renegotiateAnswer').set({ sdp: ans.sdp, type: ans.type });
+      });
+
+      const us = await db.ref('users/' + call.callerId).once('value');
+      const u = us.val() || { name: call.callerName || '?', color: '#888' };
+      showCallUI(u.name, call.type, u.color || '#888', getInitials(u.name));
+    }
+
+    async function renegotiateCall(pc, callId) {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await db.ref('calls/' + callId + '/renegotiate').set({ sdp: offer.sdp, type: offer.type });
+        const answerSnap = await db.ref('calls/' + callId + '/renegotiateAnswer').once('value');
+        if (answerSnap.exists()) {
+          await pc.setRemoteDescription(new RTCSessionDescription(answerSnap.val()));
+        } else {
+          const answerRef = db.ref('calls/' + callId + '/renegotiateAnswer');
+          answerRef.once('value', async (snap) => {
+            if (snap.exists() && pc.signalingState === 'have-local-offer') {
+              await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+              answerRef.off();
+            }
+          });
+        }
+      } catch (e) { console.error('Renegotiation error:', e); }
+    }
+
+    async function toggleCamera() {
+      if (!callState) return;
+      if (callState.camOn) {
+        const senders = callState.peer.getSenders();
+        for (let sender of senders) {
+          if (sender.track && sender.track.kind === 'video') {
+            sender.track.stop();
+            callState.peer.removeTrack(sender);
+          }
+        }
+        if (callState.localStream) {
+          callState.localStream.getVideoTracks().forEach(t => {
+            t.stop();
+            callState.localStream.removeTrack(t);
+          });
+        }
+        callState.camOn = false;
+        document.getElementById('local-video').style.display = 'none';
+        document.getElementById('local-placeholder').style.display = 'flex';
+        await renegotiateCall(callState.peer, callState.id);
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+          });
+          const videoTrack = stream.getVideoTracks()[0];
+          const senders = callState.peer.getSenders();
+          let videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(videoTrack);
+          } else {
+            callState.peer.addTrack(videoTrack, callState.localStream);
+          }
+          if (callState.localStream) {
+            callState.localStream.addTrack(videoTrack);
+          } else {
+            callState.localStream = stream;
+          }
+          callState.camOn = true;
+          document.getElementById('local-video').srcObject = callState.localStream;
+          document.getElementById('local-video').style.display = 'block';
+          document.getElementById('local-placeholder').style.display = 'none';
+          document.getElementById('call-videos').style.display = 'flex';
+          await renegotiateCall(callState.peer, callState.id);
+        } catch (e) {
+          showToast('Ошибка', 'Не удалось включить камеру', 'error');
+        }
+      }
+    }
+
+    async function toggleScreen() {
+      if (!callState) return;
+      if (callState.screenOn) {
+        const senders = callState.peer.getSenders();
+        const screenSender = senders.find(s => s.track && s.track.kind === 'video' && s.track.label.includes('screen'));
+        if (screenSender) {
+          callState.peer.removeTrack(screenSender);
+          screenSender.track.stop();
+        }
+        if (callState.camOn && callState.localStream) {
+          const cameraTrack = callState.localStream.getVideoTracks()[0];
+          if (cameraTrack) {
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) await videoSender.replaceTrack(cameraTrack);
+          }
+        }
+        callState.screenOn = false;
+        if (callState.localStream) document.getElementById('local-video').srcObject = callState.localStream;
+        else document.getElementById('local-video').style.display = 'none';
+        await renegotiateCall(callState.peer, callState.id);
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+            audio: true
+          });
+          const screenTrack = stream.getVideoTracks()[0];
+          const senders = callState.peer.getSenders();
+          let videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(screenTrack);
+          } else {
+            callState.peer.addTrack(screenTrack, callState.localStream);
+          }
+          callState.screenStream = stream;
+          callState.screenOn = true;
+          if (callState.camOn) {
+            if (callState.localStream) {
+              callState.localStream.getVideoTracks().forEach(t => t.stop());
+            }
+            callState.camOn = false;
+            document.getElementById('local-placeholder').style.display = 'flex';
+          }
+          document.getElementById('local-video').srcObject = stream;
+          document.getElementById('local-video').style.display = 'block';
+          document.getElementById('local-placeholder').style.display = 'none';
+          document.getElementById('call-videos').style.display = 'flex';
+          await renegotiateCall(callState.peer, callState.id);
+        } catch (e) {
+          showToast('Ошибка', 'Демонстрация экрана недоступна', 'error');
+        }
+      }
+    }
+
+    function rejectCall(){
+      if(incomingCall){
+        clearTimeout(incomingCall.timeout);
+        const rejId=incomingCall.id;
+        incomingCall=null;
+        document.getElementById('incoming-call').classList.add('hidden');
+        db.ref('calls/'+rejId+'/status').set('rejected').then(()=>setTimeout(()=>db.ref('calls/'+rejId).remove().catch(()=>{}),3000)).catch(()=>{});
+      }else{document.getElementById('incoming-call').classList.add('hidden');}
+    }
+    function setupRemoteStream(stream){
+      const v=document.getElementById('remote-video');
+      v.srcObject=stream;
+      v.style.display='block';
+      document.getElementById('remote-placeholder').style.display='none';
+    }
+    function showCallUI(name,type,color,initials){
+      document.getElementById('call-title').textContent=name;
+      document.getElementById('call-status').textContent='СОЕДИНЕНИЕ...';
+      document.getElementById('remote-label').textContent=name;
+      const rp=document.getElementById('remote-placeholder');
+      rp.style.background=color;
+      rp.textContent=initials;
+      rp.style.display='flex';
+      document.getElementById('remote-video').style.display='none';
+      const lp=document.getElementById('local-placeholder');
+      lp.style.background=currentUser.color||getColorFromNick(currentUser.nick);
+      lp.textContent=getInitials(currentUser.name);
+      if(type==='video'&&callState.localStream){
+        const lv=document.getElementById('local-video');
+        lv.srcObject=callState.localStream;
+        lv.style.display='block';
+        lp.style.display='none';
+        document.getElementById('call-videos').style.display='flex';
+      }else{
+        document.getElementById('call-videos').style.display='none';
+      }
+      document.getElementById('call-overlay').classList.remove('hidden');
+    }
+    function startCallTimer(){
+      let s=0;
+      callTimer=setInterval(()=>{
+        s++;
+        const t=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+        document.getElementById('call-status').textContent=(callState?.type==='video'?'ВИДЕО':'ЗВОНОК')+' • '+t;
+      },1000);
+    }
+    function endCall(){
+      clearInterval(callTimer);
+      if(callState){
+        const cid=callState.id;
+        const savedPeer=callState.peer;
+        const savedLocal=callState.localStream;
+        const savedScreen=callState.screenStream;
+        detachCallListeners(cid);
+        if(cid)db.ref('calls/'+cid).remove().catch(()=>{});
+        savedLocal?.getTracks().forEach(t=>t.stop());
+        savedScreen?.getTracks().forEach(t=>t.stop());
+        savedPeer?.close();
+        callState=null;
+      }
+      ['local-video','remote-video'].forEach(id=>{
+        const v=document.getElementById(id);
+        v.srcObject=null;
+        v.style.display='none';
+      });
+      document.getElementById('local-placeholder').style.display='flex';
+      document.getElementById('remote-placeholder').style.display='flex';
+      document.getElementById('call-overlay').classList.add('hidden');
+    }
+    function toggleMute(){
+      if(!callState)return;
+      callState.muted=!callState.muted;
+      callState.localStream?.getAudioTracks().forEach(t=>t.enabled=!callState.muted);
+      const btn=document.getElementById('mute-button');
+      btn.textContent=callState.muted?'🔇':'🎤';
+      btn.style.background=callState.muted?'var(--danger)':'var(--bg-tertiary)';
+    }
+
+    // --- Остальные функции (настройки, устройства) ---
     async function requestMediaPermissions(){ try{ const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:true}); stream.getTracks().forEach(track=>track.stop()); showToast('Доступ получен','Список устройств обновлен','success'); await loadDevices(); }catch(e){console.error('Permission error:',e); showToast('Ошибка доступа','Проверьте настройки конфиденциальности браузера','error');} }
     async function loadDevices(){ try{ const devices=await navigator.mediaDevices.enumerateDevices(); const mic=document.getElementById('mic-select'); const spk=document.getElementById('speaker-select'); const cam=document.getElementById('camera-select'); if(!mic||!spk||!cam)return; mic.innerHTML=''; spk.innerHTML=''; cam.innerHTML=''; let hasLabels=false; devices.forEach(d=>{ if(d.label)hasLabels=true; const label=d.label||`${d.kind} (${d.deviceId.slice(0,5)}...)`; if(d.kind==='audioinput')mic.innerHTML+=`<option value="${d.deviceId}">${label}</option>`; else if(d.kind==='audiooutput')spk.innerHTML+=`<option value="${d.deviceId}">${label}</option>`; else if(d.kind==='videoinput')cam.innerHTML+=`<option value="${d.deviceId}">${label}</option>`; }); if(!hasLabels&&devices.length>0)console.log("Устройства найдены, но названия скрыты (нет разрешений)"); }catch(e){console.error('Error loading devices:',e);} }
     async function testMicrophone(){ const levelEl=document.getElementById('mic-test-level'); try{ const stream=await navigator.mediaDevices.getUserMedia({audio:true}); const ctx=new AudioContext(); const src=ctx.createMediaStreamSource(stream); const analyser=ctx.createAnalyser(); src.connect(analyser); const arr=new Uint8Array(analyser.frequencyBinCount); let cnt=0; levelEl.textContent='🎤 Говорите...'; const iv=setInterval(()=>{ analyser.getByteFrequencyData(arr); const avg=arr.reduce((a,b)=>a+b)/arr.length; const bars=Math.round(avg/8); levelEl.textContent='▐'+'█'.repeat(Math.min(bars,20))+'░'.repeat(Math.max(0,20-bars))+'▌'; if(++cnt>60){clearInterval(iv);stream.getTracks().forEach(t=>t.stop());ctx.close();levelEl.textContent='✓ Тест завершён';} },80); }catch(e){levelEl.textContent='✗ Нет доступа к микрофону';} }
