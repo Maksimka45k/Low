@@ -66,7 +66,13 @@
     .search-input { width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 10px 10px 10px 32px; color: var(--text); font-family: var(--font-mono); font-size: 12px; outline: none; }
     .search-input:focus { border-color: var(--accent); }
     .search-icon { position: absolute; left: 22px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; }
-    .chats-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .chats-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  overscroll-behavior: contain;        /* запрещает pull-to-refresh */
+  -webkit-overflow-scrolling: touch;   /* плавный скролл на iOS */
+}
     .chat-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; cursor: pointer; transition: 0.2s; margin-bottom: 2px; }
     .chat-item:hover { background: var(--bg-tertiary); }
     .chat-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }
@@ -96,7 +102,16 @@
     .chat-header-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
     .chat-header-status { font-size: 11px; color: var(--text-muted); }
     .chat-header-status.online { color: var(--success); }
-    .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
     .date-divider { text-align: center; margin: 16px 0; }
     .date-divider span { background: var(--bg-tertiary); color: var(--text-muted); font-size: 10px; letter-spacing: 1px; padding: 4px 12px; border-radius: 20px; }
     .message-wrapper { display: flex; gap: 10px; max-width: 70%; }
