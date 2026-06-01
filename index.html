@@ -91,6 +91,7 @@
     .empty-logo { font-family: var(--font-display); font-weight: 800; font-size: 80px; letter-spacing: -4px; color: var(--border); opacity: 0.5; }
     .empty-text { color: var(--text-muted); font-size: 14px; }
     #chat-view { display: none; flex: 1; flex-direction: column; height: 100%; }
+    
     .chat-header { height: 65px; padding: 0 20px; display: flex; align-items: center; gap: 12px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
     .chat-header-info { flex: 1; min-width: 0; }
     .chat-header-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
@@ -188,9 +189,36 @@
     .toast-title { font-family: var(--font-display); font-weight: 700; font-size: 13px; }
     .toast-message { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
-    .sidebar-tabs { display: flex; padding: 8px 8px 0; gap: 6px; }
-    .sidebar-tab { flex: 1; padding: 6px 10px; border-radius: 10px; font-family: var(--font-display); font-weight: 600; font-size: 11px; text-align: center; cursor: pointer; color: var(--text-secondary); background: transparent; border: 1px solid transparent; transition: 0.2s; }
-    .sidebar-tab.active { background: var(--bg-tertiary); border-color: var(--border); color: var(--text); }
+   .sidebar-tabs {
+  display: flex;
+  padding: 8px 8px 0;
+  gap: 6px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: 0.2s;
+}
+
+.sidebar-tab.active {
+  background: var(--accent);
+  color: white;
+}
+
+.sidebar-tab:hover:not(.active) {
+  background: var(--bg-tertiary);
+  color: var(--text);
+}
 
     .context-menu { position: fixed; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 6px; z-index: 5000; min-width: 160px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; }
     .context-menu.show { display: block; }
@@ -223,6 +251,7 @@
       #sidebar.hidden-mobile { transform: translateX(-100%); }
       #main { width: 100%; height: 100%; position: fixed; top: 0; left: 0; background: var(--bg); z-index: 90; }
       #chat-view { height: 100%; }
+      
       .chat-header .back-button { display: inline-flex; margin-right: 8px; font-size: 24px; }
       #empty-state { display: flex; align-items: center; justify-content: center; height: 100%; }
       #settings { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 200; background: var(--bg-secondary); overflow-y: auto; transform: translateX(0); transition: transform 0.3s ease; }
@@ -252,6 +281,85 @@
     .reply-to-text { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .edited-mark { font-size: 10px; color: var(--text-muted); margin-left: 6px; font-style: italic; }
     #cancel-edit-btn { margin-right: 4px; }
+    .moments-tab { padding: 12px 16px; background: var(--bg-tertiary); border-radius: 12px; margin: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.moments-tab:hover { background: var(--accent); color: white; }
+
+.moment-item { 
+  width: 68px; height: 68px; border-radius: 50%; 
+  border: 3px solid var(--accent); 
+  overflow: hidden; 
+  flex-shrink: 0; 
+  position: relative;
+}
+.moment-item img, .moment-item video { width: 100%; height: 100%; object-fit: cover; }
+
+#moments-view { display: none; flex-direction: column; height: 100%; padding: 16px; }
+.moments-grid { display: flex; flex-wrap: wrap; gap: 16px; padding: 20px 0; }
+.moment-preview { text-align: center; }
+.moment-preview .moment-item { width: 80px; height: 80px; border-width: 4px; }
+.moment-name { margin-top: 6px; font-size: 11px; color: var(--text-secondary); }
+/* === МОМЕНТЫ === */
+.moments-tab { padding: 12px 16px; background: var(--bg-tertiary); border-radius: 12px; margin: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.moments-tab:hover { background: var(--accent); color: white; }
+
+.moment-item { 
+  width: 68px; height: 68px; border-radius: 50%; 
+  border: 3px solid var(--accent); 
+  overflow: hidden; 
+  flex-shrink: 0; 
+  position: relative;
+}
+.moment-item img, .moment-item video { width: 100%; height: 100%; object-fit: cover; }
+
+#moments-view { 
+  display: none; 
+  flex-direction: column; 
+  height: 100%; 
+  padding: 16px; 
+  overflow-y: auto;
+}
+.moments-grid { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 20px; 
+  padding: 20px 0; 
+}
+.moment-preview { 
+  text-align: center; 
+  cursor: pointer; 
+}
+.moment-preview .moment-item { 
+  width: 82px; 
+  height: 82px; 
+  border-width: 4px; 
+}
+.moment-name { 
+  margin-top: 8px; 
+  font-size: 12px; 
+  color: var(--text-secondary); 
+}
+@media (max-width: 768px) {
+  .sidebar-tabs {
+    flex-wrap: wrap;
+  }
+  .sidebar-tab {
+    flex: 1 1 33%;
+    font-size: 11px;
+    padding: 8px 6px;
+  }
+  
+  #moments-view {
+    padding: 12px;
+  }
+  .moments-grid {
+    gap: 16px;
+    justify-content: center;
+  }
+  .moment-preview .moment-item {
+    width: 76px;
+    height: 76px;
+  }
+}
   </style>
 </head>
 <body>
@@ -277,8 +385,12 @@
   </div>
   <div id="app" class="hidden">
     <div id="sidebar">
-      <div class="sidebar-header"><div class="sidebar-logo">Low</div><button class="btn-icon" onclick="showModal('dm-modal')" title="Новый чат">✉</button><button class="btn-icon" onclick="showModal('group-modal')" title="Создать группу">+</button><button class="btn-icon" onclick="toggleSettings()" title="Настройки">⚙</button></div>
-      <div class="sidebar-tabs"><div class="sidebar-tab active" onclick="switchSidebarTab('chats', this)">Чаты</div><div class="sidebar-tab" onclick="switchSidebarTab('requests', this)">Запросы в друзья</div></div>
+      <div class="sidebar-header"><div  class="sidebar-logo">Low</div><button class="btn-icon" onclick="showModal('dm-modal')" title="Новый чат">✉</button><button class="btn-icon" onclick="showModal('group-modal')" title="Создать группу">+</button><button class="btn-icon" onclick="toggleSettings()" title="Настройки">⚙</button></div>
+      <div class="sidebar-tabs">
+  <div class="sidebar-tab active" onclick="switchSidebarTab('chats', this)">Чаты</div>
+  <div class="sidebar-tab" onclick="switchSidebarTab('requests', this)">Запросы</div>
+  <div class="sidebar-tab" onclick="switchSidebarTab('moments', this)">Моменты</div>
+</div>
       <div class="search"><span class="search-icon">⌕</span><input type="text" class="search-input" id="search-input" placeholder="Поиск..." oninput="filterChats(this.value)"></div>
       <div class="chats-list" id="chats-list"></div>
       <div class="sidebar-footer"><button class="btn-icon" onclick="showModal('tos-modal')" title="Пользовательское соглашение">⚖️</button><div class="avatar small" id="user-avatar"></div><div class="user-info"><div class="user-name" id="user-name"></div><div class="user-nick" id="user-nick"></div></div></div>
@@ -309,6 +421,11 @@
           <button class="btn-icon" style="font-size:20px;color:var(--accent)" onclick="sendMessage()">➤</button>
         </div>
       </div>
+      <div id="moments-view">
+  <div style="font-family:var(--font-display);font-size:26px;font-weight:800;margin-bottom:20px">Моменты</div>
+  <button class="btn btn-primary" onclick="createMoment()" style="width:100%;margin-bottom:24px">+ Создать момент</button>
+  <div class="moments-grid" id="moments-grid"></div>
+</div>
     </div>
     <div id="settings" class="hidden">
       <div class="settings-header"><h2>Настройки</h2><button class="btn-icon" onclick="toggleSettings()">✕</button></div>
@@ -507,8 +624,113 @@
     const originalToggleSettings = window.toggleSettings;
     window.toggleSettings = function(){ if(isMobile){ const settings=document.getElementById('settings'); settings.classList.remove('hidden'); settings.classList.toggle('hidden-mobile'); document.body.style.overflow=settings.classList.contains('hidden-mobile')?'':'hidden'; }else{ originalToggleSettings(); } };
     window.addEventListener('resize',()=>{ isMobile=window.innerWidth<=768; const settingsEl=document.getElementById('settings'); const sidebarEl=document.getElementById('sidebar'); if(isMobile){ settingsEl.classList.remove('hidden'); settingsEl.classList.add('hidden-mobile'); if(!activeChat)sidebarEl.classList.remove('hidden-mobile'); else sidebarEl.classList.add('hidden-mobile'); }else{ settingsEl.classList.remove('hidden-mobile'); settingsEl.classList.add('hidden'); sidebarEl.classList.remove('hidden-mobile'); } });
+// ====================== МОМЕНТЫ ======================
+async function createMoment() {
+  showModal('moment-modal');
+}
 
+async function uploadMoment() {
+  const file = document.getElementById('moment-file').files[0];
+  if (!file) return showToast('Ошибка', 'Выбери фото или видео', 'error');
+
+  const expire = parseInt(document.getElementById('moment-expire').value);
+  const visibility = document.getElementById('moment-visibility').value;
+
+  const btn = document.querySelector('#moment-modal button:last-child');
+  const old = btn.textContent;
+  btn.textContent = 'Загрузка...';
+  btn.disabled = true;
+
+  try {
+    const url = await uploadToCatbox(file, false);
+
+    await db.ref('moments').push({
+      userId: currentUser.uid,
+      userNick: currentUser.nick,
+      userName: currentUser.name,
+      url: url,
+      type: file.type.startsWith('image/') ? 'image' : 'video',
+      visibility: visibility,           // новое поле
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      expiresAt: Date.now() + expire * 1000
+    });
+
+    hideModal('moment-modal');
+    showToast('Готово!', 'Момент опубликован', 'success');
+    if (document.getElementById('moments-view').style.display === 'flex') loadMoments();
+  } catch(e) {
+    showToast('Ошибка', e.message || 'Не удалось загрузить', 'error');
+  }
+
+  btn.textContent = old;
+  btn.disabled = false;
+  document.getElementById('moment-file').value = '';
+}
+
+async function loadMoments() {
+  const grid = document.getElementById('moments-grid');
+  grid.innerHTML = '<div style="padding:40px;color:var(--text-muted);text-align:center">Загрузка моментов...</div>';
+
+  const snap = await db.ref('moments').once('value');
+  const now = Date.now();
+  let html = '';
+
+  snap.forEach(child => {
+    const m = child.val();
+    if (!m || m.expiresAt < now) return;
+
+    html += `
+      <div class="moment-preview" onclick="openMediaModal('${m.url}', '${m.type}')">
+        <div class="moment-item">
+          ${m.type === 'image' ? `<img src="${m.url}" loading="lazy">` : `<video src="${m.url}" muted></video>`}
+        </div>
+        <div class="moment-name">@${m.userNick}</div>
+      </div>`;
+  });
+
+  grid.innerHTML = html || '<div style="padding:60px;color:var(--text-muted);text-align:center">Пока никто не выложил моменты</div>';
+}
+
+// Перехват переключения вкладок
+const originalSwitchSidebarTab = window.switchSidebarTab || function(){};
+window.switchSidebarTab = function(tab, el) {
+  originalSwitchSidebarTab(tab, el);
+  
+  document.getElementById('chat-view').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('moments-view').style.display = (tab === 'moments') ? 'flex' : 'none';
+  
+  if (tab === 'moments') loadMoments();
+};
     auth.onAuthStateChanged(async (user)=>{ document.getElementById('loading').style.display='none'; if(user){ let snap; try{ snap=await db.ref('users/'+user.uid).once('value'); }catch(err){ console.error('DB access error:',err); if(err.code==='PERMISSION_DENIED'){ document.getElementById('auth').classList.add('hidden'); document.getElementById('app').classList.add('hidden'); document.getElementById('loading').style.display='flex'; document.getElementById('loading').innerHTML=`<div style="max-width:440px;background:#12121f;border:1px solid #2a2a3a;border-radius:24px;padding:40px"><div>Ошибка доступа. Проверьте правила Firebase.</div><pre style="color:#00d68f">... rules ...</pre><button onclick="location.reload()">Перезагрузить</button></div>`; } return; } if(!snap.exists()){auth.signOut();return;} currentUser=snap.val(); document.getElementById('auth').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); await initializeApp(); const params=new URLSearchParams(location.search); if(params.get('channel'))joinChannelFromLink(params.get('channel')); }else{ currentUser=null; activeChat=null; document.getElementById('auth').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); ['login-nick','login-password','register-name','register-nick','register-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';}); } });
   </script>
+<div id="moment-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:380px">
+    <div class="modal-title">Новый Момент</div>
+    <div class="field">
+      <label>Фото или видео</label>
+      <input type="file" id="moment-file" accept="image/*,video/*" style="width:100%;padding:12px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:10px">
+    </div>
+    <div class="field">
+      <label>Кому показывать</label>
+      <select id="moment-visibility" style="width:100%;padding:12px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:10px">
+        <option value="all">🌐 Для всех</option>
+        <option value="friends" selected>👥 Только друзьям (в разработке)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Сколько хранить</label>
+      <select id="moment-expire" style="width:100%;padding:12px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:10px">
+        <option value="3600">1 час</option>
+        <option value="86400" selected>24 часа</option>
+        <option value="259200">3 дня</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('moment-modal')">Отмена</button>
+      <button class="btn btn-primary" onclick="uploadMoment()">Опубликовать</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
