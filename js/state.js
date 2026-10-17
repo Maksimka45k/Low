@@ -1,0 +1,21 @@
+export const state = {
+  me: null,
+  privKey: null,
+  pendingPassword: null,
+  registering: false,
+  tab: 'chats',
+  search: '',
+  chat: null,
+  encrypted: false,
+  messages: new Map(),
+  replyTo: null,
+  editing: null,
+  file: null,
+  filePreviewUrl: null,
+  sending: false,
+  requests: {},
+  members: [],
+  groupType: 'group',
+  call: null,
+  incoming: null
+};
