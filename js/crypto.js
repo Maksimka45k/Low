@@ -7,6 +7,8 @@ const ECDH = { name: 'ECDH', namedCurve: 'P-256' };
 const AES = { name: 'AES-GCM', length: 256 };
 const SAFE_TYPES = /^(image\/(png|jpeg|gif|webp)|video\/(mp4|webm|ogg)|audio\/(mpeg|ogg|wav|webm|mp4|aac|x-m4a)|application\/pdf|text\/plain)$/;
 
+export const cryptoAvailable = !!globalThis.crypto?.subtle;
+
 const rand = n => crypto.getRandomValues(new Uint8Array(n));
 
 export function toB64(buf) {
@@ -27,7 +29,7 @@ function openStore() {
   });
 }
 
-async function withStore(mode, fn) {
+async function runStore(mode, fn) {
   const database = await openStore();
   return new Promise((resolve, reject) => {
     const tx = database.transaction('keys', mode);
@@ -36,6 +38,11 @@ async function withStore(mode, fn) {
     tx.onerror = () => { database.close(); reject(tx.error); };
   });
 }
+
+const withStore = (mode, fn) => Promise.race([
+  runStore(mode, fn),
+  new Promise((_, reject) => setTimeout(() => reject(new Error('indexedDB timeout')), 3000))
+]);
 
 const loadStored = uid => withStore('readonly', s => s.get(uid)).catch(() => null);
 const saveStored = (uid, key) => withStore('readwrite', s => s.put(key, uid)).catch(() => {});
