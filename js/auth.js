@@ -219,9 +219,12 @@ export async function initAuth(callbacks) {
   hooks = callbacks;
   let fired = false;
   setTimeout(() => { if (!fired) recoverFromStall(); }, 6000);
+  window.__lowStage = 'prepare';
   await prepareAuthStorage();
+  window.__lowStage = 'listen';
   auth.onAuthStateChanged(async user => {
     fired = true;
+    window.__lowStage = 'state';
     $('loading').classList.add('hidden');
     if (state.registering) return;
     if (user) await startSession(user);
