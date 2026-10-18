@@ -1,6 +1,6 @@
 import { db } from './firebase.js';
 import { state } from './state.js';
-import { $, h, clear, avatar, getUser, initials, userColor, safeColor, isMobile } from './util.js';
+import { $, h, clear, avatar, getUser, initials, userColor, safeColor, isMobile, toast } from './util.js';
 import { otherUid, resolveMode, startMessages, stopMessages, resetComposer } from './messages.js';
 import { loadMoments } from './moments.js';
 
@@ -34,13 +34,16 @@ function scheduleRender() {
 
 function chatRow(chat, info) {
   const unread = chat.unread?.[state.me.uid] || 0;
+  const hidden = (chat.cleared?.[state.me.uid] || 0) >= (chat.lastAt || 0);
+  const preview = hidden ? 'Нет сообщений' : (chat.lastMsg || 'Нет сообщений');
+  const time = hidden ? '' : (chat.lastMsgTime || '');
   return h('div', { class: 'chat-item' + (state.chat?.id === chat.id ? ' active' : ''), onclick: () => openChat(chat.id) },
     h('div', { class: 'avatar ' + (chat.type === 'dm' ? '' : chat.type), style: { background: info.color }, text: info.initials }),
     h('div', { class: 'chat-info' },
       h('div', { class: 'chat-name', text: info.name }),
-      h('div', { class: 'chat-preview', text: chat.lastMsg || 'Нет сообщений' })),
+      h('div', { class: 'chat-preview', text: preview })),
     h('div', { class: 'chat-meta' },
-      h('div', { class: 'chat-time', text: chat.lastMsgTime || '' }),
+      h('div', { class: 'chat-time', text: time }),
       unread ? h('div', { class: 'unread-badge', text: String(unread) }) : null));
 }
 
@@ -68,17 +71,22 @@ export function filterChats(value) {
 function watchChat(id) {
   const ref = db.ref('chats/' + id);
   const handler = snap => {
+    if (chatRefs.get(id)?.handler !== handler) return;
     if (snap.exists()) {
       const fresh = { id, ...snap.val() };
       chatCache.set(id, fresh);
       if (state.chat?.id === id) Object.assign(state.chat, fresh);
     } else {
       chatCache.delete(id);
+      if (state.chat?.id === id) {
+        closeChat();
+        toast('Чат удалён', '', 'success');
+      }
     }
     scheduleRender();
   };
-  ref.on('value', handler, () => {});
   chatRefs.set(id, { ref, handler });
+  ref.on('value', handler, () => {});
 }
 
 export function startChatList() {
@@ -91,6 +99,7 @@ export function startChatList() {
       entry.ref.off('value', entry.handler);
       chatRefs.delete(id);
       chatCache.delete(id);
+      if (state.chat?.id === id) closeChat();
     }
     for (const id of ids) if (!chatRefs.has(id)) watchChat(id);
     scheduleRender();
