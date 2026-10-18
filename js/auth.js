@@ -150,12 +150,22 @@ async function repairProfile(user) {
   return { ...profile, createdAt: Date.now() };
 }
 
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+  ]);
+}
+
 async function startSession(user) {
   try {
     if (!cryptoAvailable) throw new Error('Шифрование недоступно: откройте сайт по https://');
-    const snap = await db.ref('users/' + user.uid).once('value');
+    window.__lowStage = 'profile';
+    const snap = await withTimeout(db.ref('users/' + user.uid).once('value'), 12000, 'Нет связи с базой данных. Проверьте интернет, VPN или DNS и попробуйте снова.');
+    window.__lowStage = 'keys';
     state.me = snap.exists() ? { ...snap.val(), uid: user.uid } : await repairProfile(user);
     if (!(await ensureKeys(user))) return;
+    window.__lowStage = 'ready';
     state.pendingPassword = null;
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
