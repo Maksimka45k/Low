@@ -18,7 +18,8 @@
     var stuck = box && !box.classList.contains('hidden');
     var auth = document.getElementById('auth');
     var app = document.getElementById('app');
-    var nothing = auth && app && auth.classList.contains('hidden') && app.classList.contains('hidden');
+    var modal = document.querySelector('.modal-overlay:not(.hidden)');
+    var nothing = auth && app && !modal && auth.classList.contains('hidden') && app.classList.contains('hidden');
     if (!stuck && !nothing) return;
     var ua = navigator.userAgent;
     var msg = 'Не удалось запустить мессенджер. Обновите браузер или откройте сайт в Chrome.';
