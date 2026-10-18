@@ -129,11 +129,17 @@ export function stopMessages() {
   state.messages.clear();
 }
 
+function messageQuery(chat) {
+  const base = db.ref('messages/' + chat.id).orderByChild('at');
+  const cleared = chat.cleared?.[state.me.uid] || 0;
+  return cleared ? base.startAt(cleared + 1) : base;
+}
+
 export function startMessages() {
   stopMessages();
   const chat = state.chat;
   clear($('messages'));
-  query = db.ref('messages/' + chat.id).orderByChild('at').limitToLast(LIMITS.page);
+  query = messageQuery(chat).limitToLast(LIMITS.page);
   let chain = Promise.resolve();
   let ready = false;
   const enqueue = fn => { chain = chain.then(fn).catch(console.error); };
@@ -165,7 +171,7 @@ async function loadOlder(chat, button) {
   const first = $('messages').querySelector('.message-wrapper');
   if (!first) return;
   button.disabled = true;
-  const snap = await db.ref('messages/' + chat.id).orderByChild('at').endAt(Number(first.dataset.at) - 1).limitToLast(LIMITS.page).once('value');
+  const snap = await messageQuery(chat).endAt(Number(first.dataset.at) - 1).limitToLast(LIMITS.page).once('value');
   const items = [];
   snap.forEach(child => { items.push({ id: child.key, ...child.val() }); });
   const box = $('messages');
@@ -296,6 +302,10 @@ async function touchChat(chat, mode, payload) {
     preview = state.me.name + ': ' + text;
   }
   await db.ref('chats/' + chat.id).update({ lastMsg: preview, lastMsgTime: getCurrentTime(), lastAt: TS });
+  if (chat.type === 'dm') {
+    const other = otherUid(chat);
+    if (other) db.ref('userChats/' + other + '/' + chat.id).set(true).catch(() => {});
+  }
   for (const uid of Object.keys(chat.participants || chat.members || {})) {
     if (uid !== state.me.uid) db.ref('chats/' + chat.id + '/unread/' + uid).transaction(v => (v || 0) + 1);
   }
