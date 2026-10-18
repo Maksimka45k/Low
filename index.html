@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/motion.css">
 </head>
 <body>
   <div id="loading"><div class="spinner"></div></div>
@@ -228,6 +229,22 @@
     <div class="modal">
       <div id="info-content"></div>
       <div class="modal-actions"><button class="btn btn-secondary" data-act="closeModal" data-arg="info-modal">Закрыть</button></div>
+    </div>
+  </div>
+
+  <div id="delete-modal" class="modal-overlay hidden">
+    <div class="modal narrow">
+      <div class="modal-title">Удалить чат</div>
+      <div class="info-sub">Выберите, где удалить переписку.</div>
+      <div class="delete-options">
+        <button class="btn btn-secondary" data-act="deleteSelf">Удалить только у меня</button>
+        <div class="info-sub">Собеседник сохранит переписку. Если он напишет снова, чат вернётся без старых сообщений.</div>
+        <button class="btn btn-danger" data-act="deleteBoth">Удалить у обоих</button>
+        <div class="info-sub">Все сообщения будут стёрты у вас и у собеседника без возможности восстановления.</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" data-act="closeModal" data-arg="delete-modal">Отмена</button>
+      </div>
     </div>
   </div>
 
