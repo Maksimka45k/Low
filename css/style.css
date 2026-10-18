@@ -96,12 +96,10 @@
     .message-sender { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
     .message-time { font-size: 10px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
     .out .message-time { justify-content: flex-end; }
-    .input-area { padding: 16px 20px; background: var(--bg-secondary); border-top: 1px solid var(--border); display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+    .input-area { flex-shrink: 0; padding: 14px 20px; background: var(--bg-secondary); border-top: 1px solid var(--border); display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
     .input-area .flex-grow { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-    .message-input { width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; color: var(--text); font-family: var(--font-mono); font-size: 13px; outline: none; resize: none; max-height: 120px; line-height: 1.5; }
+    .message-input { width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; color: var(--text); font-family: var(--font-mono); font-size: 13px; outline: none; resize: none; box-sizing: border-box; display: block; flex-shrink: 0; min-height: 46px; max-height: 120px; line-height: 1.5; }
     .message-input:focus { border-color: var(--accent); }
-    .file-options { display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 11px; }
-    .file-options label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-secondary); }
     .media-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; align-items: center; justify-content: center; flex-direction: column; backdrop-filter: blur(10px); }
     .media-modal.hidden { display: none; }
     .media-modal-content { max-width: 90vw; max-height: 90vh; }
@@ -317,7 +315,6 @@
 .row input { flex: 1; }
 .link { color: var(--accent); text-decoration: underline; }
 .message-text { white-space: pre-wrap; }
-.attach-note { font-size: 10px; color: var(--text-muted); }
 .note { padding: 20px; text-align: center; color: var(--text-muted); }
 .note.big { padding: 60px 20px; }
 .moments-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
@@ -368,3 +365,19 @@
 .message-wrapper.flash { background: rgba(108, 92, 231, 0.2); }
 .delete-options { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .delete-options .info-sub { margin: 0 0 10px; }
+.file-options { display: flex; }
+.file-options.hidden { display: none; }
+.file-toggle { display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px; cursor: pointer; user-select: none; }
+.file-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.file-toggle-track { position: relative; width: 30px; height: 16px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); transition: background 0.2s, border-color 0.2s; flex-shrink: 0; }
+.file-toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); transition: transform 0.2s, background 0.2s; }
+.file-toggle input:checked + .file-toggle-track { background: var(--accent); border-color: var(--accent); }
+.file-toggle input:checked + .file-toggle-track::after { transform: translateX(14px); background: white; }
+.file-toggle input:focus-visible + .file-toggle-track { outline: 2px solid var(--accent-light); outline-offset: 2px; }
+.file-toggle-off { display: none; }
+.file-toggle input:not(:checked) ~ .file-toggle-on { display: none; }
+.file-toggle input:not(:checked) ~ .file-toggle-off { display: inline; }
+@media (max-width: 768px) {
+  .input-area { padding: 10px 12px; gap: 8px; }
+  .file-toggle { font-size: 13px; padding: 8px 14px 8px 10px; }
+}
