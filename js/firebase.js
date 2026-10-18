@@ -1,5 +1,11 @@
 import { FIREBASE_CONFIG } from './config.js';
 
+try {
+  Object.keys(localStorage)
+    .filter(key => key.startsWith('firebase:previous_websocket_failure') || key.startsWith('firebase:host:'))
+    .forEach(key => localStorage.removeItem(key));
+} catch {}
+
 firebase.initializeApp(FIREBASE_CONFIG);
 
 export const auth = firebase.auth();
