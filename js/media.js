@@ -1,4 +1,4 @@
-import { $, h, clear } from './util.js';
+import { $, h, clear, toast } from './util.js';
 import { decryptFile } from './crypto.js';
 
 const HOST = /^https:\/\/(files|litter)\.catbox\.moe\/[\w.\-/]+$/;
@@ -10,21 +10,46 @@ const EXT = {
 
 export const safeMediaUrl = url => (typeof url === 'string' && HOST.test(url) ? url : null);
 
-export async function uploadFile(file, permanent) {
+const CATBOX = 'https://catbox.moe/user/api.php';
+const LITTER = 'https://litterbox.catbox.moe/resources/internals/api.php';
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function postOnce(file, permanent) {
   const form = new FormData();
-  let url = 'https://catbox.moe/user/api.php';
-  if (!permanent) {
-    url = 'https://litterbox.catbox.moe/resources/internals/api.php';
-    form.append('time', '72h');
-  }
+  if (!permanent) form.append('time', '72h');
   form.append('reqtype', 'fileupload');
   form.append('userhash', '');
   form.append('fileToUpload', file);
-  const res = await fetch(url, { method: 'POST', body: form });
-  if (!res.ok) throw new Error('Загрузка не удалась: ' + res.status);
+  const res = await fetch(permanent ? CATBOX : LITTER, { method: 'POST', body: form });
+  if (!res.ok) throw Object.assign(new Error('Загрузка не удалась: ' + res.status), { retry: res.status >= 500 });
   const out = (await res.text()).trim();
-  if (!safeMediaUrl(out)) throw new Error('Неожиданный ответ сервера');
+  if (!safeMediaUrl(out)) throw Object.assign(new Error('Неожиданный ответ сервера'), { retry: true });
   return out;
+}
+
+async function postWithRetry(file, permanent) {
+  let last;
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await postOnce(file, permanent);
+    } catch (e) {
+      last = e;
+      if (e.retry === false) break;
+      await wait(800 * (i + 1));
+    }
+  }
+  throw last;
+}
+
+export async function uploadFile(file, permanent) {
+  try {
+    return await postWithRetry(file, permanent);
+  } catch (e) {
+    if (!permanent) throw e;
+    const url = await postWithRetry(file, false);
+    toast('Файл', 'Постоянное хранилище недоступно, файл сохранён на 72 часа');
+    return url;
+  }
 }
 
 export function mediaKind(file) {
