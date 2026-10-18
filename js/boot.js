@@ -24,7 +24,8 @@
     var msg = 'Не удалось запустить мессенджер. Обновите браузер или откройте сайт в Chrome.';
     if (!window.firebase) msg = 'Не загрузились скрипты Firebase. Проверьте интернет и отключите блокировщики.';
     if (errors.length) msg += '\n\n' + errors.slice(0, 3).join('\n');
-    msg += '\n\n' + ua;
+    msg += '\n\nstage: ' + (window.__lowStage || 'none') + ', ver: ' + (window.__lowVer || 'old');
+    msg += '\n' + ua;
     show(msg);
   }, 10000);
 })();
