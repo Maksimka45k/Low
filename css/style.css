@@ -1,4 +1,4 @@
-    :root {
+:root {
       --bg: #0a0a12;
       --bg-secondary: #12121f;
       --bg-tertiary: #1a1a2c;
@@ -362,7 +362,7 @@
 #remote-audio { display: none; }
 .auth-box .btn { margin-top: 8px; }
 .modal-actions .btn { width: auto; }
-.fatal { max-width: 440px; text-align: center; padding: 24px; line-height: 1.6; }
+.fatal { white-space: pre-wrap; word-break: break-word; max-width: 440px; text-align: center; padding: 24px; line-height: 1.6; }
 .incoming-actions .btn { flex: 1; width: auto; }
 .message-wrapper { transition: background 0.5s; border-radius: 12px; }
 .message-wrapper.flash { background: rgba(108, 92, 231, 0.2); }
