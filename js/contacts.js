@@ -18,7 +18,15 @@ async function findDm(uid) {
   if (hit) return hit.id;
   const id = dmId(state.me.uid, uid);
   const own = await db.ref('userChats/' + state.me.uid + '/' + id).once('value');
-  return own.exists() ? id : null;
+  if (own.exists()) return id;
+  try {
+    const chat = await db.ref('chats/' + id).once('value');
+    if (!chat.exists() || !chat.child('participants/' + state.me.uid).exists()) return null;
+    await db.ref('userChats/' + state.me.uid + '/' + id).set(true);
+    return id;
+  } catch {
+    return null;
+  }
 }
 
 export async function sendRequest(uid) {
@@ -197,6 +205,49 @@ export async function leaveGroup() {
   closeChat();
 }
 
+export function askDeleteChat() {
+  if (state.chat?.type !== 'dm') return;
+  hideModal('info-modal');
+  showModal('delete-modal');
+}
+
+export async function deleteChatSelf() {
+  const chat = state.chat;
+  if (chat?.type !== 'dm') return;
+  hideModal('delete-modal');
+  closeChat();
+  try {
+    await db.ref().update({
+      ['chats/' + chat.id + '/cleared/' + state.me.uid]: TS,
+      ['chats/' + chat.id + '/unread/' + state.me.uid]: 0,
+      ['userChats/' + state.me.uid + '/' + chat.id]: null
+    });
+    toast('Чат удалён', 'Он исчез только у вас', 'success');
+  } catch (e) {
+    toast('Ошибка', e.message, 'error');
+  }
+}
+
+export async function deleteChatBoth() {
+  const chat = state.chat;
+  if (chat?.type !== 'dm') return;
+  const other = Object.keys(chat.participants || {}).find(uid => uid !== state.me.uid);
+  hideModal('delete-modal');
+  closeChat();
+  try {
+    const update = {
+      ['messages/' + chat.id]: null,
+      ['chats/' + chat.id]: null,
+      ['userChats/' + state.me.uid + '/' + chat.id]: null
+    };
+    if (other) update['userChats/' + other + '/' + chat.id] = null;
+    await db.ref().update(update);
+    toast('Чат удалён', 'Переписка стёрта у обоих', 'success');
+  } catch (e) {
+    toast('Ошибка', e.message, 'error');
+  }
+}
+
 const channelLink = id => location.origin + location.pathname + '?channel=' + id;
 
 export function copyChannelLink() {
@@ -253,6 +304,8 @@ export async function showChatInfo() {
     } else {
       box.append(h('div', { class: 'info-sub', text: 'Чат не зашифрован: у собеседника нет ключей.' }));
     }
+    box.append(h('div', { class: 'divider' }),
+      h('button', { class: 'btn btn-danger', 'data-act': 'deleteChat', text: 'Удалить чат' }));
   } else {
     const members = Object.keys(chat.members || {});
     const owner = chat.ownerId === state.me.uid;
