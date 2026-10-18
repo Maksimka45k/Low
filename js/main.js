@@ -1,6 +1,6 @@
 import { db } from './firebase.js';
 import { state } from './state.js';
-import { $, showModal, hideModal } from './util.js';
+import { $, showModal, hideModal, toast } from './util.js';
 import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, cancelUnlock, logout } from './auth.js';
 import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats } from './chats.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
@@ -17,6 +17,9 @@ if (location.protocol === 'file:') {
   $('loading').textContent = 'Запустите через локальный сервер';
   throw new Error('file protocol');
 }
+
+window.addEventListener('unhandledrejection', e => toast('Ошибка', String(e.reason?.message || e.reason), 'error'));
+window.addEventListener('error', e => toast('Ошибка', e.message, 'error'));
 
 const actions = {
   authTab: switchAuthTab,
