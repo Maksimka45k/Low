@@ -4,7 +4,7 @@ import { $, showModal, hideModal, toast } from './util.js';
 import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, cancelUnlock, logout } from './auth.js';
 import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats } from './chats.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
-import { createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
+import { askDeleteChat, deleteChatSelf, deleteChatBoth, createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
 import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, listenForCalls, stopCalls } from './calls.js';
 import { uploadMoment } from './moments.js';
 import { closeMediaModal } from './media.js';
@@ -61,6 +61,9 @@ const actions = {
   rejectRequest,
   invite,
   leaveGroup,
+  deleteChat: askDeleteChat,
+  deleteSelf: deleteChatSelf,
+  deleteBoth: deleteChatBoth,
   copyChannelLink,
   acceptCall,
   rejectCall,
