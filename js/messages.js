@@ -252,6 +252,7 @@ export function resetFile() {
   state.filePreviewUrl = null;
   state.file = null;
   clear($('file-preview')).classList.add('hidden');
+  $('file-options').classList.add('hidden');
   $('file-input').value = '';
 }
 
@@ -269,6 +270,7 @@ export function selectFile(file) {
     h('span', { class: 'file-preview-remove', 'data-act': 'removeFile', text: '✕' })
   );
   box.classList.remove('hidden');
+  $('file-options').classList.remove('hidden');
 }
 
 export function resetComposer() {
