@@ -13,6 +13,9 @@ import {
   fillProfile, loadDevices, requestMediaPermissions, testMicrophone, startCameraPreview, requestNotifications
 } from './settings.js';
 
+window.__lowVer = 'v5';
+window.__lowStage = 'main';
+
 if (location.protocol === 'file:') {
   $('loading').textContent = 'Запустите через локальный сервер';
   throw new Error('file protocol');
