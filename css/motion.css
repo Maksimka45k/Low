@@ -1,0 +1,74 @@
+@media (min-width: 769px) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  @keyframes m-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes m-pop { from { opacity: 0; transform: translateY(12px) scale(0.96); } to { opacity: 1; transform: none; } }
+  @keyframes m-slide-left { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+  @keyframes m-slide-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+  @keyframes m-msg-in { from { opacity: 0; transform: translateX(-12px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @keyframes m-msg-out { from { opacity: 0; transform: translateX(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @keyframes m-badge { 0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  @keyframes m-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  @keyframes m-glow { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 50% { box-shadow: 0 0 24px 2px color-mix(in srgb, var(--accent) 35%, transparent); } }
+  @keyframes m-ring { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+  .modal-overlay { animation: m-fade 0.2s ease both; }
+  .modal { animation: m-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+  #call-overlay { animation: m-fade 0.3s ease both; }
+  #settings { animation: m-slide-right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  #chat-view:not(.hidden) { animation: m-fade 0.25s ease both; }
+  #moments-view:not(.hidden) { animation: m-fade 0.25s ease both; }
+  #auth:not(.hidden) .auth-box { animation: m-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+
+  .empty-logo { animation: m-float 5s ease-in-out infinite; }
+
+  .chat-item { animation: m-slide-left 0.3s ease both; transition: background 0.2s, transform 0.2s; }
+  .chat-item:hover { transform: translateX(4px); }
+  .chat-item:active { transform: translateX(4px) scale(0.99); }
+  .chat-item:nth-child(2) { animation-delay: 0.03s; }
+  .chat-item:nth-child(3) { animation-delay: 0.06s; }
+  .chat-item:nth-child(4) { animation-delay: 0.09s; }
+  .chat-item:nth-child(5) { animation-delay: 0.12s; }
+  .chat-item:nth-child(n+6) { animation-delay: 0.15s; }
+
+  .unread-badge { animation: m-badge 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+
+  .message-wrapper.in { animation: m-msg-in 0.28s ease both; }
+  .message-wrapper.out { animation: m-msg-out 0.28s ease both; }
+  .message-bubble { transition: transform 0.2s, box-shadow 0.2s; }
+  .message-wrapper:hover .message-bubble { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+  .message-file.image img { transition: transform 0.25s; }
+  .message-file.image:hover img { transform: scale(1.03); }
+
+  .btn { transition: background 0.2s, transform 0.15s, box-shadow 0.2s, color 0.2s; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0) scale(0.97); }
+  .btn-primary:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .btn-danger:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--danger) 30%, transparent); }
+  .btn-icon { transition: background 0.2s, color 0.2s, transform 0.2s; }
+  .btn-icon:hover { transform: scale(1.12); }
+  .btn-icon:active { transform: scale(0.92); }
+  #send-btn:not(:disabled):hover { animation: m-glow 1.6s ease-in-out infinite; }
+
+  .avatar { transition: transform 0.25s, box-shadow 0.25s; }
+  .chat-item:hover .avatar { transform: scale(1.08); }
+  .avatar.clickable:hover { transform: scale(1.1) rotate(-4deg); }
+
+  .sidebar-tab { transition: background 0.2s, color 0.2s, transform 0.15s; }
+  .sidebar-tab:active { transform: scale(0.95); }
+  .settings-nav-item { transition: background 0.2s, color 0.2s, transform 0.2s; }
+  .settings-nav-item:hover { transform: translateX(4px); }
+  .color-option:hover { transform: scale(1.2); }
+
+  .search-input { transition: border-color 0.2s, box-shadow 0.25s; }
+  .search-input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .message-input { transition: border-color 0.2s, box-shadow 0.25s; }
+  .message-input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .field input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+
+  .moment-preview { animation: m-pop 0.35s ease both; transition: transform 0.25s; }
+  .moment-preview:hover { transform: translateY(-4px) scale(1.02); }
+  .context-menu.show { animation: m-pop 0.18s ease both; }
+  #toast .toast-bar { animation: m-ring 1.2s ease-in-out 2; }
+  .call-button { transition: background 0.2s, transform 0.2s; }
+  .call-button:hover { transform: scale(1.1); }
+  .call-button:active { transform: scale(0.94); }
+}
