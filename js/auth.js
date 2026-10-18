@@ -1,13 +1,28 @@
 import { auth, db, TS, EmailAuthProvider } from './firebase.js';
 import { state } from './state.js';
-import { $, h, showModal, hideModal, colorFromNick, resetUserCache } from './util.js';
-import { unlockKeys, restoreKeys, forgetKeys, resetCrypto } from './crypto.js';
+import { $, showModal, hideModal, colorFromNick, resetUserCache } from './util.js';
+import { unlockKeys, restoreKeys, forgetKeys, resetCrypto, cryptoAvailable } from './crypto.js';
 
 const DOMAIN = '@low.local';
 const BAD_LOGIN = ['auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'];
+const BAD_UNLOCK = ['auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'];
+const LABELS = { login: ['ВОЙТИ →', 'ВХОД...'], register: ['СОЗДАТЬ →', 'СОЗДАНИЕ...'] };
 
 let hooks = null;
 let unlockResolver = null;
+let busy = false;
+let lastForm = 'login';
+
+function setBusy(on, form) {
+  busy = on;
+  for (const [name, [idle, working]] of Object.entries(LABELS)) {
+    const button = document.querySelector('[data-act="' + name + '"]');
+    button.disabled = on;
+    button.textContent = on && name === form ? working : idle;
+  }
+}
+
+const showError = text => { $(lastForm + '-error').textContent = text; };
 
 export function switchAuthTab(tab) {
   const tabs = document.querySelectorAll('#auth .tabs .tab');
@@ -18,53 +33,67 @@ export function switchAuthTab(tab) {
 }
 
 export async function handleLogin() {
+  if (busy) return;
   const nick = $('login-nick').value.trim().toLowerCase();
   const password = $('login-password').value;
-  const error = $('login-error');
-  error.textContent = '';
-  if (!nick || !password) { error.textContent = 'Заполните поля'; return; }
+  lastForm = 'login';
+  showError('');
+  if (!nick || !password) { showError('Заполните поля'); return; }
+  setBusy(true, 'login');
   state.pendingPassword = password;
   try {
     await auth.signInWithEmailAndPassword(nick + DOMAIN, password);
   } catch (e) {
     state.pendingPassword = null;
-    if (BAD_LOGIN.includes(e.code)) error.textContent = 'Неверный никнейм или пароль';
-    else if (e.code === 'auth/too-many-requests') error.textContent = 'Слишком много попыток, попробуйте позже';
-    else error.textContent = 'Ошибка: ' + e.message;
+    setBusy(false);
+    if (BAD_LOGIN.includes(e.code)) showError('Неверный никнейм или пароль');
+    else if (e.code === 'auth/too-many-requests') showError('Слишком много попыток, попробуйте позже');
+    else showError('Ошибка: ' + e.message);
   }
 }
 
 export async function handleRegister() {
+  if (busy) return;
   const name = $('register-name').value.trim();
   const nick = $('register-nick').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
   const password = $('register-password').value;
-  const error = $('register-error');
-  error.textContent = '';
-  if (!name || !nick || !password) { error.textContent = 'Заполните поля'; return; }
-  if (nick.length < 3) { error.textContent = 'Никнейм минимум 3 символа'; return; }
-  if (password.length < 6) { error.textContent = 'Пароль минимум 6 символов'; return; }
+  lastForm = 'register';
+  showError('');
+  if (!name || !nick || !password) { showError('Заполните поля'); return; }
+  if (nick.length < 3) { showError('Никнейм минимум 3 символа'); return; }
+  if (password.length < 6) { showError('Пароль минимум 6 символов'); return; }
+  setBusy(true, 'register');
   state.registering = true;
   state.pendingPassword = password;
-  let cred = null;
+  const fail = text => {
+    state.registering = false;
+    state.pendingPassword = null;
+    setBusy(false);
+    showError(text);
+  };
+  let cred;
   try {
     cred = await auth.createUserWithEmailAndPassword(nick + DOMAIN, password);
-    try {
-      await db.ref('nickToUid/' + nick).set(cred.user.uid);
-    } catch {
-      await cred.user.delete();
-      cred = null;
-      throw new Error('Никнейм занят');
-    }
+  } catch (e) {
+    fail(e.code === 'auth/email-already-in-use' ? 'Никнейм занят' : 'Ошибка: ' + e.message);
+    return;
+  }
+  try {
+    await db.ref('nickToUid/' + nick).set(cred.user.uid);
+  } catch (e) {
+    await cred.user.delete().catch(() => {});
+    fail(e.code === 'PERMISSION_DENIED' ? 'Никнейм занят' : 'Ошибка: ' + e.message);
+    return;
+  }
+  try {
     await db.ref('users/' + cred.user.uid).set({
       uid: cred.user.uid, nick, name, color: colorFromNick(nick), status: '', createdAt: TS
     });
-    state.registering = false;
-    await startSession(cred.user);
   } catch (e) {
-    state.registering = false;
-    state.pendingPassword = null;
-    error.textContent = e.code === 'auth/email-already-in-use' ? 'Никнейм занят' : e.message;
+    console.warn('profile write failed, will retry on session start', e.message);
   }
+  state.registering = false;
+  await startSession(cred.user);
 }
 
 function askUnlock() {
@@ -84,8 +113,9 @@ export async function submitUnlock() {
     hideModal('unlock-modal');
     unlockResolver?.(true);
     unlockResolver = null;
-  } catch {
-    $('unlock-error').textContent = 'Неверный пароль';
+  } catch (e) {
+    const wrong = BAD_UNLOCK.includes(e.code) || e.name === 'OperationError';
+    $('unlock-error').textContent = (wrong ? 'Неверный пароль' : 'Ошибка: ' + e.message) + ' (' + (e.code || e.name) + ')';
   }
 }
 
@@ -109,32 +139,36 @@ async function ensureKeys(user) {
   return askUnlock();
 }
 
-function showFatal() {
-  const box = $('loading');
-  box.classList.remove('hidden');
-  box.replaceChildren(h('div', { class: 'fatal' },
-    h('div', { text: 'Ошибка доступа к базе данных. Проверьте правила Firebase.' }),
-    h('button', { class: 'btn btn-primary mt16', text: 'Перезагрузить', onclick: () => location.reload() })));
+async function repairProfile(user) {
+  const nick = String(user.email || '').replace(DOMAIN, '').toLowerCase();
+  if (!/^[a-z0-9_]{3,20}$/.test(nick)) throw new Error('Профиль не найден');
+  const owner = (await db.ref('nickToUid/' + nick).once('value')).val();
+  if (owner && owner !== user.uid) throw new Error('Профиль не найден');
+  if (!owner) await db.ref('nickToUid/' + nick).set(user.uid);
+  const profile = { uid: user.uid, nick, name: nick, color: colorFromNick(nick), status: '', createdAt: TS };
+  await db.ref('users/' + user.uid).set(profile);
+  return { ...profile, createdAt: Date.now() };
 }
 
 async function startSession(user) {
-  let snap;
   try {
-    snap = await db.ref('users/' + user.uid).once('value');
-  } catch {
-    showFatal();
-    return;
-  }
-  if (!snap.exists()) {
+    if (!cryptoAvailable) throw new Error('Шифрование недоступно: откройте сайт по https://');
+    const snap = await db.ref('users/' + user.uid).once('value');
+    state.me = snap.exists() ? { ...snap.val(), uid: user.uid } : await repairProfile(user);
+    if (!(await ensureKeys(user))) return;
+    state.pendingPassword = null;
+    $('auth').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    hooks.onReady();
+  } catch (e) {
+    console.error(e);
+    state.me = null;
+    state.pendingPassword = null;
+    showError(e.code === 'PERMISSION_DENIED' ? 'Ошибка доступа к базе. Проверьте правила Firebase.' : e.message);
     await auth.signOut();
-    return;
+  } finally {
+    setBusy(false);
   }
-  state.me = { ...snap.val(), uid: user.uid };
-  if (!(await ensureKeys(user))) return;
-  state.pendingPassword = null;
-  $('auth').classList.add('hidden');
-  $('app').classList.remove('hidden');
-  hooks.onReady();
 }
 
 function teardown() {
@@ -142,6 +176,9 @@ function teardown() {
   resetCrypto();
   resetUserCache();
   Object.assign(state, { me: null, chat: null, tab: 'chats', search: '', pendingPassword: null });
+  setBusy(false);
+  switchAuthTab('login');
+  $('settings').classList.add('hidden');
   $('app').classList.add('hidden');
   $('auth').classList.remove('hidden');
   for (const id of ['login-nick', 'login-password', 'register-name', 'register-nick', 'register-password']) $(id).value = '';
