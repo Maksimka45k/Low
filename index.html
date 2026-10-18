@@ -79,9 +79,13 @@
             <div id="reply-preview" class="reply-preview hidden"></div>
             <div id="file-preview" class="file-preview hidden"></div>
             <textarea class="message-input" id="message-input" placeholder="Написать..." rows="1" maxlength="4000"></textarea>
-            <div class="file-options">
-              <label><input type="checkbox" id="temp-file-checkbox" checked> Временный файл (72 часа, рекомендуется)</label>
-              <span class="attach-note">⚡ Постоянное хранение — снимите галочку</span>
+            <div class="file-options hidden" id="file-options">
+              <label class="file-toggle">
+                <input type="checkbox" id="temp-file-checkbox" checked>
+                <span class="file-toggle-track"></span>
+                <span class="file-toggle-on">Временный файл · 72 часа</span>
+                <span class="file-toggle-off">Постоянное хранение</span>
+              </label>
             </div>
           </div>
           <input type="file" id="file-input" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/*,audio/*,application/pdf,.txt,.zip,.rar">
