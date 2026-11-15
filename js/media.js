@@ -20,16 +20,16 @@ async function postOnce(file, permanent) {
   form.append('reqtype', 'fileupload');
   form.append('userhash', '');
   form.append('fileToUpload', file);
-  const res = await fetch(permanent ? CATBOX : LITTER, { method: 'POST', body: form });
+  const res = await fetch(permanent ? CATBOX : LITTER, { method: 'POST', body: form, signal: AbortSignal.timeout(20000 + file.size / 100) });
   if (!res.ok) throw Object.assign(new Error('Загрузка не удалась: ' + res.status), { retry: res.status >= 500 });
   const out = (await res.text()).trim();
   if (!safeMediaUrl(out)) throw Object.assign(new Error('Неожиданный ответ сервера'), { retry: true });
   return out;
 }
 
-async function postWithRetry(file, permanent) {
+async function postWithRetry(file, permanent, tries = 3) {
   let last;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < tries; i++) {
     try {
       return await postOnce(file, permanent);
     } catch (e) {
@@ -43,12 +43,17 @@ async function postWithRetry(file, permanent) {
 
 export async function uploadFile(file, permanent) {
   try {
-    return await postWithRetry(file, permanent);
-  } catch (e) {
-    if (!permanent) throw e;
-    const url = await postWithRetry(file, false);
-    toast('Файл', 'Постоянное хранилище недоступно, файл сохранён на 72 часа');
-    return url;
+    return await postWithRetry(file, permanent, 1);
+  } catch (first) {
+    try {
+      const url = await postWithRetry(file, !permanent);
+      toast('Файл', permanent
+        ? 'Постоянное хранилище недоступно, файл сохранён на 72 часа'
+        : 'Временное хранилище недоступно, файл сохранён в постоянном');
+      return url;
+    } catch {
+      throw first;
+    }
   }
 }
 
