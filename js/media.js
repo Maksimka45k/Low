@@ -8,7 +8,8 @@ const EXT = {
   audio: /\.(mp3|wav|ogg|m4a|aac)$/i
 };
 
-export const safeMediaUrl = url => (typeof url === 'string' && HOST.test(url) ? url : null);
+const KLIPY = /^https:\/\/[a-z0-9-]+\.klipy\.com\/[\w.\-/]+$/;
+export const safeMediaUrl = url => (typeof url === 'string' && (HOST.test(url) || KLIPY.test(url)) ? url : null);
 
 const CATBOX = 'https://catbox.moe/user/api.php';
 const LITTER = 'https://litterbox.catbox.moe/resources/internals/api.php';
