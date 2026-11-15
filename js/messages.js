@@ -338,6 +338,35 @@ function setSending(on) {
   if (!state.editing) $('send-btn').textContent = on ? '⏳' : '➤';
 }
 
+export async function sendGif(file) {
+  const chat = state.chat;
+  if (!chat || state.sending || state.editing) return;
+  setSending(true);
+  try {
+    const { mode, key } = await resolveMode(chat);
+    if (mode === 'blocked') {
+      toast('Шифрование', 'Ключи не загружены. Войдите заново.', 'error');
+      return;
+    }
+    const payload = { file };
+    if (state.replyTo) payload.replyTo = { ...state.replyTo };
+    const msg = { from: state.me.uid, at: TS };
+    if (mode === 'enc') {
+      msg.v = 2;
+      msg.enc = await encryptJson(key, payload, messageAad(chat.id, state.me.uid));
+    } else {
+      Object.assign(msg, payload);
+    }
+    await db.ref('messages/' + chat.id).push(msg);
+    cancelReply();
+    await touchChat(chat, mode, payload);
+  } catch (e) {
+    toast('Ошибка', e.message || 'Не удалось отправить', 'error');
+  } finally {
+    setSending(false);
+  }
+}
+
 export async function sendMessage() {
   const chat = state.chat;
   if (!chat || state.sending) return;
