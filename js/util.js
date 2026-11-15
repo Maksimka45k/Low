@@ -40,6 +40,10 @@ export const formatTime = ts =>
 
 export const getCurrentTime = () => formatTime(Date.now());
 
+// Содержимое аватара: картинка (info.img) или инициалы.
+export const avatarContent = info =>
+  info.img ? h('img', { class: 'avatar-img', src: info.img, alt: '', draggable: 'false' }) : info.initials;
+
 export const avatar = (user, cls = 'avatar') =>
   h('div', { class: cls, style: { background: userColor(user) }, text: initials(user?.name) });
 
