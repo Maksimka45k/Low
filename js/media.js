@@ -61,7 +61,43 @@ export function mediaKind(file) {
   return 'file';
 }
 
-export function openMediaModal(src, kind) {
+let current = null;
+
+async function downloadCurrent(e) {
+  e.stopPropagation();
+  if (!current) return;
+  const { src, name } = current;
+  const fileName = name || decodeURIComponent(src.split('/').pop().split('?')[0]) || 'file';
+  try {
+    let href = src;
+    if (!src.startsWith('blob:')) {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error('fetch');
+      href = URL.createObjectURL(await res.blob());
+      setTimeout(() => URL.revokeObjectURL(href), 15000);
+    }
+    const link = h('a', { href, download: fileName });
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } catch {
+    window.open(src, '_blank', 'noopener,noreferrer');
+    toast('Скачивание', 'Прямое скачивание недоступно, файл открыт в новой вкладке');
+  }
+}
+
+function ensureDownloadButton() {
+  if ($('media-download')) return;
+  $('media-modal').append(h('button', {
+    id: 'media-download', class: 'media-modal-close', title: 'Скачать', text: '⬇',
+    style: { right: '90px', border: 'none', fontSize: '24px', background: 'rgba(0,0,0,0.5)' },
+    onclick: downloadCurrent
+  }));
+}
+
+export function openMediaModal(src, kind, name) {
+  ensureDownloadButton();
+  current = { src, name };
   const box = clear($('media-modal-content'));
   if (kind === 'image') box.append(h('img', { src, alt: '' }));
   else if (kind === 'video') box.append(h('video', { src, controls: true, autoplay: true }));
@@ -79,7 +115,7 @@ function player(kind, src, name) {
   if (kind === 'image') {
     return h('img', {
       class: 'inline-img', src, alt: name, loading: 'lazy',
-      onclick: e => { e.stopPropagation(); openMediaModal(src, 'image'); }
+      onclick: e => { e.stopPropagation(); openMediaModal(src, 'image', name); }
     });
   }
   if (kind === 'video') return h('video', { class: 'inline-img', src, controls: true, preload: 'metadata' });
