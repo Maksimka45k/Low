@@ -4,7 +4,7 @@ import { sendGif } from './messages.js';
 import { safeMediaUrl } from './media.js';
 
 // Вставьте сюда ключ с klipy.com/developers (между кавычками).
-const KLIPY_KEY = 'ВСТАВЬТЕ_КЛЮЧ_СЮДА';
+const KLIPY_KEY = 'ifvdGO9p4KdxOoBBSkI8cyJtSTINkvYwqjIfcDIjrSz7OtjkDoqPo2xOWDfvm318';
 
 const API = 'https://api.klipy.com/api/v1/';
 const PER_PAGE = 24;
