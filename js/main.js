@@ -5,6 +5,7 @@ import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, can
 import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats, cachedChats } from './chats.js';
 import { startPresence, stopPresence } from './presence.js';
 import { initGif } from './gif.js';
+import { ensureSavedChat } from './saved.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
 import { askDeleteChat, deleteChatSelf, deleteChatBoth, createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
 import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, listenForCalls, stopCalls } from './calls.js';
@@ -117,6 +118,7 @@ function onReady() {
   fillProfile();
   startPresence(cachedChats);
   startChatList();
+  ensureSavedChat();
   startRequests();
   listenForCalls();
   loadDevices();
