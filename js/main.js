@@ -2,7 +2,8 @@ import { db } from './firebase.js';
 import { state } from './state.js';
 import { $, showModal, hideModal, toast } from './util.js';
 import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, cancelUnlock, logout } from './auth.js';
-import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats } from './chats.js';
+import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats, cachedChats } from './chats.js';
+import { startPresence, stopPresence } from './presence.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
 import { askDeleteChat, deleteChatSelf, deleteChatBoth, createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
 import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, listenForCalls, stopCalls } from './calls.js';
@@ -112,9 +113,7 @@ window.addEventListener('resize', updatePanels);
 
 function onReady() {
   fillProfile();
-  const online = db.ref('users/' + state.me.uid + '/online');
-  online.set(true);
-  online.onDisconnect().set(false);
+  startPresence(cachedChats);
   startChatList();
   startRequests();
   listenForCalls();
@@ -125,6 +124,7 @@ function onReady() {
 }
 
 function onLogout() {
+  stopPresence();
   endCall();
   stopCalls();
   stopChatList();
