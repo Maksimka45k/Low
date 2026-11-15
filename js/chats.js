@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { $, h, clear, avatar, getUser, initials, userColor, safeColor, isMobile, toast } from './util.js';
 import { otherUid, resolveMode, startMessages, stopMessages, resetComposer } from './messages.js';
 import { loadMoments } from './moments.js';
+import { watchOnline } from './presence.js';
 
 const chatCache = new Map();
 const chatRefs = new Map();
@@ -10,8 +11,7 @@ let listRef = null;
 let listHandler = null;
 let requestsRef = null;
 let requestsHandler = null;
-let onlineRef = null;
-let onlineHandler = null;
+let stopWatch = null;
 let renderToken = 0;
 let frame = 0;
 
@@ -189,8 +189,8 @@ function updateStatus(online) {
 }
 
 function stopOnline() {
-  onlineRef?.off('value', onlineHandler);
-  onlineRef = null;
+  stopWatch?.();
+  stopWatch = null;
 }
 
 export async function openChat(id) {
@@ -216,11 +216,7 @@ export async function openChat(id) {
   $('call-video-btn').classList.toggle('hidden', !dm);
   $('input-area').classList.toggle('hidden', chat.type === 'channel' && chat.ownerId !== state.me.uid);
   updateStatus(false);
-  if (dm && info.uid) {
-    onlineRef = db.ref('users/' + info.uid + '/online');
-    onlineHandler = s => updateStatus(!!s.val());
-    onlineRef.on('value', onlineHandler);
-  }
+  if (dm && info.uid) stopWatch = watchOnline(info.uid, updateStatus);
   updatePanels();
   startMessages();
   scheduleRender();
