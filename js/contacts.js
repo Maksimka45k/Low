@@ -1,6 +1,6 @@
 import { db, TS } from './firebase.js';
 import { state } from './state.js';
-import { COLORS, $, h, clear, avatar, getUser, toast, showModal, hideModal, colorFromNick, getCurrentTime } from './util.js';
+import { COLORS, $, h, clear, avatar, avatarContent, getUser, toast, showModal, hideModal, colorFromNick, getCurrentTime } from './util.js';
 import { hasKeys, createGroupKeys, wrapGroupKeyFor, cacheChatKey, safetyNumber } from './crypto.js';
 import { cachedChats, displayInfo, openChat, setTab, closeChat } from './chats.js';
 
@@ -275,7 +275,7 @@ export async function joinChannel(id) {
 }
 
 const head = (info, cls, nick, desc) => h('div', { class: 'info-head' },
-  h('div', { class: 'avatar large ' + cls, style: { background: info.color }, text: info.initials }),
+  h('div', { class: 'avatar large ' + cls, style: { background: info.color } }, avatarContent(info)),
   h('div', { class: 'info-name', text: info.name }),
   nick ? h('div', { class: 'info-nick', text: nick }) : null,
   desc ? h('div', { class: 'info-sub', text: desc }) : null);
