@@ -1,0 +1,28 @@
+:root{--bg:#0a0a12;--bg2:#12121f;--bg3:#1a1a2c;--ac:#6c5ce7;--tx:#e0e0f0;--tx2:#9090b0;--bad:#ff4d6d;--warn:#f7c948;--ok:#00d68f}
+*{box-sizing:border-box;margin:0}
+[hidden]{display:none!important}
+body{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--tx)}
+#login{min-height:100vh;display:grid;place-items:center}
+.card{background:var(--bg2);padding:28px;border-radius:12px;width:min(360px,92vw);display:grid;gap:12px}
+h1{font-size:18px;letter-spacing:2px}
+input,select{background:var(--bg3);border:1px solid #2a2a44;color:var(--tx);padding:10px;border-radius:8px;font:inherit;width:100%}
+.btn{background:var(--bg3);color:var(--tx);border:1px solid #2a2a44;padding:8px 12px;border-radius:8px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block}
+.btn:hover{border-color:var(--ac)}.btn.primary{background:var(--ac);border-color:var(--ac)}.btn.danger{color:var(--bad);border-color:#5a2030}
+.err{color:var(--bad);min-height:16px}
+header{display:flex;gap:16px;align-items:center;padding:12px 16px;background:var(--bg2)}
+header span{flex:1;color:var(--tx2)}
+nav{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px}
+nav input{flex:1;min-width:200px}
+.tab.on{background:var(--ac);border-color:var(--ac)}
+main{padding:0 16px 40px;display:grid;gap:8px}
+.row{display:flex;gap:12px;justify-content:space-between;align-items:center;background:var(--bg2);padding:12px;border-radius:10px;flex-wrap:wrap}
+.info{display:grid;gap:4px;min-width:0}.info small{color:var(--tx2);word-break:break-all}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{padding:2px 8px;border-radius:99px;font-size:11px}.tag.bad{background:#3a1520;color:var(--bad)}.tag.warn{background:#3a3015;color:var(--warn)}
+.note{color:var(--tx2);padding:24px;text-align:center}
+dialog{margin:auto;background:var(--bg2);color:var(--tx);border:1px solid #2a2a44;border-radius:12px;padding:20px;width:min(380px,92vw)}
+dialog::backdrop{background:#000a}
+dialog>*{margin-bottom:10px}dialog .acts{justify-content:flex-end;margin:0}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ok);color:#000;padding:10px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:.2s}
+#toast.show{opacity:1}#toast.bad{background:var(--bad);color:#fff}
