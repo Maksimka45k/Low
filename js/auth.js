@@ -163,6 +163,8 @@ async function startSession(user) {
     window.__lowStage = 'profile';
     const snap = await withTimeout(db.ref('users/' + user.uid).once('value'), 12000, 'Нет связи с базой данных. Проверьте интернет, VPN или DNS и попробуйте снова.');
     window.__lowStage = 'keys';
+    const ban = (await db.ref('bans/' + user.uid).once('value')).val();
+    if (ban && ban.until > Date.now()) throw new Error('Аккаунт заблокирован' + (ban.reason ? ': ' + ban.reason : ''));
     state.me = snap.exists() ? { ...snap.val(), uid: user.uid } : await repairProfile(user);
     if (!(await ensureKeys(user))) return;
     window.__lowStage = 'ready';
