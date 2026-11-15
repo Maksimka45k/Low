@@ -99,7 +99,9 @@ function ask(title, o = {}) {
   return new Promise(res => {
     const d = $('dlg');
     $('dlg-title').textContent = title;
-    $('dlg-dur').hidden = $('dlg-reason').hidden = !o.dur;
+    $('dlg-dur').hidden = !o.dur;
+    $('dlg-reason').hidden = !(o.dur || o.input);
+    $('dlg-reason').placeholder = o.input || 'причина (необязательно)';
     $('dlg-reason').value = '';
     $('dlg-word').hidden = !o.word;
     $('dlg-word').value = '';
@@ -156,6 +158,22 @@ async function wipeChat(c, name) {
   run(async () => { await db.ref().update(chatPaths(c)); await log('delete-chat', c.id, name); }, 'Чат удалён');
 }
 
+async function giveChannel(c, name) {
+  const r = await ask('Новый владелец «' + name + '»', { input: 'ник нового владельца (без @)' });
+  if (!r || !r.reason) return;
+  const nick = r.reason.toLowerCase().replace('@', '');
+  const u = Object.values(S.users).find(x => x.nick === nick);
+  if (!u) return toast('Такого ника нет', 1);
+  run(async () => {
+    await db.ref().update({
+      ['chats/' + c.id + '/ownerId']: u.uid,
+      ['chats/' + c.id + '/members/' + u.uid]: true,
+      ['userChats/' + u.uid + '/' + c.id]: true
+    });
+    await log('transfer-channel', c.id, nick);
+  }, 'Владелец изменён');
+}
+
 async function delMoment(m) {
   if (!await ask('Удалить момент @' + m.userNick + '?')) return;
   run(async () => { await db.ref('moments/' + m.id).remove(); await log('delete-moment', m.id, m.userNick); }, 'Момент удалён');
@@ -190,6 +208,7 @@ const chatsRows = q => Object.values(S.chats)
       c.id + ' · участников: ' + mem.length + (c.ownerId ? ' · владелец ' + who(c.ownerId) : ''),
       [live(cb) && tag('ЗАБЛОКИРОВАН ' + when(cb.until) + (cb.reason ? ' · ' + cb.reason : ''), 'bad')],
       [live(cb) ? btn('Разбан', () => drop('chatBans', c.id)) : btn('Бан чата', () => flag('chatBans', c.id, 'Бан: ' + name), 'danger'),
+       c.type === 'channel' && btn('Новый владелец', () => giveChannel(c, name)),
        btn('Удалить', () => wipeChat(c, name), 'danger')]);
   });
 
