@@ -8,10 +8,14 @@ import { uploadFile, attachmentNode } from './media.js';
 let query = null;
 let handlers = null;
 
-export const otherUid = chat => Object.keys(chat.participants || {}).find(uid => uid !== state.me.uid);
+export const otherUid = chat => (chat.saved ? state.me.uid : Object.keys(chat.participants || {}).find(uid => uid !== state.me.uid));
 
 export async function resolveMode(chat) {
   if (chat.type === 'channel') return { mode: 'plain' };
+  if (chat.saved) {
+    const key = await chatKey(chat);
+    return key ? { mode: 'enc', key } : { mode: 'blocked' };
+  }
   if (chat.type === 'dm') {
     const other = otherUid(chat);
     if (!other || !(await hasKeys(other))) return { mode: 'plain' };
