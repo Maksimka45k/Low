@@ -1,6 +1,6 @@
 import { db } from './firebase.js';
 import { state } from './state.js';
-import { $, h, clear, avatar, getUser, initials, userColor, safeColor, isMobile, toast } from './util.js';
+import { $, h, clear, avatar, avatarContent, getUser, initials, userColor, safeColor, isMobile, toast } from './util.js';
 import { otherUid, resolveMode, startMessages, stopMessages, resetComposer } from './messages.js';
 import { loadMoments } from './moments.js';
 import { watchOnline } from './presence.js';
@@ -18,7 +18,7 @@ let frame = 0;
 export const cachedChats = () => [...chatCache.values()];
 
 export async function displayInfo(chat) {
-  if (chat.saved) return { name: 'Избранное', initials: '🔖', color: '#6c5ce7' };
+  if (chat.saved) return { name: 'Избранное', initials: '', img: 'saved.png', color: '#0d0d1a' };
   if (chat.type === 'dm') {
     const uid = otherUid(chat);
     const user = uid ? await getUser(uid) : null;
@@ -40,7 +40,7 @@ function chatRow(chat, info) {
   const preview = hidden ? empty : (chat.lastMsg || empty);
   const time = hidden ? '' : (chat.lastMsgTime || '');
   return h('div', { class: 'chat-item' + (state.chat?.id === chat.id ? ' active' : ''), onclick: () => openChat(chat.id) },
-    h('div', { class: 'avatar ' + (chat.type === 'dm' ? '' : chat.type), style: { background: info.color }, text: info.initials }),
+    h('div', { class: 'avatar ' + (chat.type === 'dm' ? '' : chat.type), style: { background: info.color } }, avatarContent(info)),
     h('div', { class: 'chat-info' },
       h('div', { class: 'chat-name', text: info.name }),
       h('div', { class: 'chat-preview', text: preview })),
@@ -216,7 +216,7 @@ export async function openChat(id) {
   const av = $('chat-avatar');
   av.className = 'avatar small ' + (chat.type === 'dm' ? '' : chat.type);
   av.style.background = info.color;
-  av.textContent = info.initials;
+  av.replaceChildren(avatarContent(info));
   $('chat-name').textContent = info.name;
   const dm = chat.type === 'dm' && !chat.saved;
   $('call-audio-btn').classList.toggle('hidden', !dm);
