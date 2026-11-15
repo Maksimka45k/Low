@@ -59,6 +59,8 @@
     .chat-item:hover { background: var(--bg-tertiary); }
     .chat-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }
     .avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 15px; flex-shrink: 0; }
+    .avatar { overflow: hidden; }
+    .avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .avatar.group { border-radius: 14px; }
     .avatar.channel { border-radius: 10px; }
     .avatar.small { width: 32px; height: 32px; font-size: 12px; }
