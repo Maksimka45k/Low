@@ -206,14 +206,14 @@ export async function leaveGroup() {
 }
 
 export function askDeleteChat() {
-  if (state.chat?.type !== 'dm') return;
+  if (state.chat?.type !== 'dm' || state.chat.saved) return;
   hideModal('info-modal');
   showModal('delete-modal');
 }
 
 export async function deleteChatSelf() {
   const chat = state.chat;
-  if (chat?.type !== 'dm') return;
+  if (chat?.type !== 'dm' || chat.saved) return;
   hideModal('delete-modal');
   closeChat();
   try {
@@ -230,7 +230,7 @@ export async function deleteChatSelf() {
 
 export async function deleteChatBoth() {
   const chat = state.chat;
-  if (chat?.type !== 'dm') return;
+  if (chat?.type !== 'dm' || chat.saved) return;
   const other = Object.keys(chat.participants || {}).find(uid => uid !== state.me.uid);
   hideModal('delete-modal');
   closeChat();
@@ -295,7 +295,11 @@ export async function showChatInfo() {
   if (!chat) return;
   const info = await displayInfo(chat);
   const box = clear($('info-content'));
-  if (chat.type === 'dm') {
+  if (chat.saved) {
+    box.append(head(info, '', '', 'Заметки, файлы и ссылки, которые видите только вы'));
+    box.append(h('div', { class: 'divider' }), h('div', { class: 'section-title', text: 'Шифрование' }),
+      h('div', { class: 'info-sub', text: state.encrypted ? 'Содержимое шифруется вашим ключом: прочитать его можете только вы.' : 'Ключи не загружены.' }));
+  } else if (chat.type === 'dm') {
     box.append(head(info, '', '@' + (info.user?.nick || ''), info.user?.status || ''));
     box.append(h('div', { class: 'divider' }), h('div', { class: 'section-title', text: 'Шифрование' }));
     if (state.encrypted) {
