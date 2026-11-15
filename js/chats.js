@@ -18,6 +18,7 @@ let frame = 0;
 export const cachedChats = () => [...chatCache.values()];
 
 export async function displayInfo(chat) {
+  if (chat.saved) return { name: 'Избранное', initials: '🔖', color: '#6c5ce7' };
   if (chat.type === 'dm') {
     const uid = otherUid(chat);
     const user = uid ? await getUser(uid) : null;
@@ -35,7 +36,8 @@ function scheduleRender() {
 function chatRow(chat, info) {
   const unread = chat.unread?.[state.me.uid] || 0;
   const hidden = (chat.cleared?.[state.me.uid] || 0) >= (chat.lastAt || 0);
-  const preview = hidden ? 'Нет сообщений' : (chat.lastMsg || 'Нет сообщений');
+  const empty = chat.saved ? 'Заметки для себя' : 'Нет сообщений';
+  const preview = hidden ? empty : (chat.lastMsg || empty);
   const time = hidden ? '' : (chat.lastMsgTime || '');
   return h('div', { class: 'chat-item' + (state.chat?.id === chat.id ? ' active' : ''), onclick: () => openChat(chat.id) },
     h('div', { class: 'avatar ' + (chat.type === 'dm' ? '' : chat.type), style: { background: info.color }, text: info.initials }),
@@ -50,7 +52,7 @@ function chatRow(chat, info) {
 async function renderChatList() {
   if (state.tab !== 'chats') return;
   const token = ++renderToken;
-  const chats = cachedChats().sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
+  const chats = cachedChats().sort((a, b) => (b.saved ? 1 : 0) - (a.saved ? 1 : 0) || (b.lastAt || 0) - (a.lastAt || 0));
   const infos = await Promise.all(chats.map(displayInfo));
   if (token !== renderToken || state.tab !== 'chats') return;
   const query = state.search.trim().toLowerCase();
@@ -178,6 +180,11 @@ function updateStatus(online) {
   if (!chat) return;
   const el = $('chat-status');
   const lock = state.encrypted ? ' · 🔒 шифрование' : ' · 🔓 без шифрования';
+  if (chat.saved) {
+    el.textContent = '🔖 заметки для себя' + lock;
+    el.className = 'chat-header-status';
+    return;
+  }
   if (chat.type === 'dm') {
     el.textContent = (online ? 'онлайн' : 'не в сети') + lock;
     el.className = 'chat-header-status' + (online ? ' online' : '');
@@ -211,7 +218,7 @@ export async function openChat(id) {
   av.style.background = info.color;
   av.textContent = info.initials;
   $('chat-name').textContent = info.name;
-  const dm = chat.type === 'dm';
+  const dm = chat.type === 'dm' && !chat.saved;
   $('call-audio-btn').classList.toggle('hidden', !dm);
   $('call-video-btn').classList.toggle('hidden', !dm);
   $('input-area').classList.toggle('hidden', chat.type === 'channel' && chat.ownerId !== state.me.uid);
