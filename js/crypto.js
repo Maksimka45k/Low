@@ -128,7 +128,7 @@ export async function chatKey(chat) {
   if (chatKeys.has(chat.id)) return chatKeys.get(chat.id);
   let key = null;
   if (chat.type === 'dm') {
-    const other = Object.keys(chat.participants || {}).find(uid => uid !== state.me.uid);
+    const other = chat.saved ? state.me.uid : Object.keys(chat.participants || {}).find(uid => uid !== state.me.uid);
     key = other ? await sharedKey(other) : null;
   } else {
     const wrapped = chat.keys?.[state.me.uid];
