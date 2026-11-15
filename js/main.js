@@ -4,6 +4,7 @@ import { $, showModal, hideModal, toast } from './util.js';
 import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, cancelUnlock, logout } from './auth.js';
 import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats, cachedChats } from './chats.js';
 import { startPresence, stopPresence } from './presence.js';
+import { initGif } from './gif.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
 import { askDeleteChat, deleteChatSelf, deleteChatBoth, createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
 import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, listenForCalls, stopCalls } from './calls.js';
@@ -110,6 +111,7 @@ $('font-select').addEventListener('change', e => setFont(e.target.value));
 $('font-size-range').addEventListener('input', e => setFontSize(e.target.value));
 document.querySelectorAll('.color-option').forEach(el => { el.style.background = el.dataset.arg; });
 window.addEventListener('resize', updatePanels);
+initGif();
 
 function onReady() {
   fillProfile();
