@@ -46,9 +46,9 @@ async function withRetry(fn, tries) {
   throw last;
 }
 
-async function postCloudinary(file) {
+async function cloudinaryOnce(file, name) {
   const form = new FormData();
-  form.append('file', file);
+  form.append('file', file, name);
   form.append('upload_preset', PRESET);
   const res = await fetch('https://api.cloudinary.com/v1_1/' + CLOUD + '/auto/upload', {
     method: 'POST', body: form, signal: AbortSignal.timeout(20000 + file.size / 100)
@@ -57,6 +57,21 @@ async function postCloudinary(file) {
   if (!res.ok) throw Object.assign(new Error(json?.error?.message || 'Cloudinary: ' + res.status), { retry: res.status >= 500 });
   if (!safeMediaUrl(json.secure_url)) throw Object.assign(new Error('Неожиданный ответ сервера'), { retry: true });
   return json.secure_url;
+}
+
+// Зашифрованный блок называется data.bin; если Cloudinary не принимает такое расширение, пробуем другие.
+async function postCloudinary(file) {
+  const names = file.name === 'data.bin' ? ['data.bin', 'data.txt', 'data.dat'] : [file.name];
+  let last;
+  for (const name of names) {
+    try {
+      return await cloudinaryOnce(file, name);
+    } catch (e) {
+      last = e;
+      if (!/not allowed/i.test(e.message || '')) throw e;
+    }
+  }
+  throw last;
 }
 
 const HOSTS = {
@@ -72,7 +87,8 @@ export async function uploadFile(file, permanent) {
   if (file.size > CLD_MAX) order = order.filter(name => name !== 'cloudinary');
   const bad = name => Date.now() - (failedAt[name] || 0) < 10 * 60 * 1000;
   order = [...order.filter(name => !bad(name)), ...order.filter(bad)];
-  let first;
+  const errors = [];
+  const LABEL = { cloudinary: 'Cloudinary', catbox: 'Catbox', litter: 'litterbox' };
   for (const [i, name] of order.entries()) {
     try {
       const url = await HOSTS[name](file, i === order.length - 1 ? 3 : 1);
@@ -80,10 +96,10 @@ export async function uploadFile(file, permanent) {
       return url;
     } catch (e) {
       failedAt[name] = Date.now();
-      first ||= e;
+      errors.push(LABEL[name] + ': ' + (e.message || 'ошибка'));
     }
   }
-  throw first;
+  throw new Error(errors.join(' | '));
 }
 
 // Фото с камеры сжимаются перед отправкой (до 1920 px, JPEG): меньше места и трафика.
