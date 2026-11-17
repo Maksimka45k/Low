@@ -3,7 +3,7 @@ import { state } from './state.js';
 import { LIMITS } from './config.js';
 import { $, h, clear, avatar, getUser, linkify, toast, formatTime, getCurrentTime } from './util.js';
 import { chatKey, hasKeys, encryptJson, decryptJson, encryptFile, messageAad } from './crypto.js';
-import { uploadFile, attachmentNode } from './media.js';
+import { uploadFile, attachmentNode, compressImage } from './media.js';
 
 let query = null;
 let handlers = null;
@@ -287,6 +287,7 @@ export function resetComposer() {
 }
 
 async function uploadAttachment(file, encrypted) {
+  file = await compressImage(file);
   const limit = encrypted ? LIMITS.encryptedFile : LIMITS.plainFile;
   if (file.size > limit) throw new Error('Файл больше ' + limit / 1048576 + ' MB');
   const permanent = !$('temp-file-checkbox').checked;
