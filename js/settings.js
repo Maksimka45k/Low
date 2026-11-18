@@ -9,6 +9,14 @@ const THEMES = {
 
 const root = document.documentElement;
 
+// Оформление хранится в браузере (на этом устройстве) и применяется при каждом открытии сайта.
+const STORE = 'low:appearance';
+const prefs = (() => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } })();
+const savePrefs = patch => {
+  Object.assign(prefs, patch);
+  try { localStorage.setItem(STORE, JSON.stringify(prefs)); } catch {}
+};
+
 export const toggleSettings = () => $('settings').classList.toggle('hidden');
 
 export function switchSettingsTab(name, el) {
@@ -56,18 +64,53 @@ export function cycleAvatarColor() {
 export function setAccentColor(color, el) {
   document.querySelectorAll('.color-option').forEach(e => e.classList.toggle('active', e === el));
   root.style.setProperty('--accent', color);
+  savePrefs({ accent: color });
 }
 
-export function setTheme(dark) {
+function applyTheme(dark) {
   for (const [name, value] of Object.entries(THEMES[dark ? 'dark' : 'light'])) root.style.setProperty(name, value);
 }
 
-export const setFont = font => root.style.setProperty('--font-mono', font);
+export function setTheme(dark) {
+  applyTheme(dark);
+  savePrefs({ dark: !!dark });
+}
+
+export function setFont(font) {
+  root.style.setProperty('--font-mono', font);
+  savePrefs({ font });
+}
 
 export function setFontSize(size) {
   $('font-size-value').textContent = size + 'px';
   root.style.setProperty('--msg-size', size + 'px');
+  savePrefs({ size: Number(size) });
 }
+
+function loadAppearance() {
+  if (/^#[0-9a-f]{6}$/i.test(prefs.accent || '')) {
+    root.style.setProperty('--accent', prefs.accent);
+    document.querySelectorAll('.color-option').forEach(e => e.classList.toggle('active', e.dataset.arg === prefs.accent));
+  }
+  if (typeof prefs.dark === 'boolean') {
+    applyTheme(prefs.dark);
+    const toggle = $('dark-theme-toggle');
+    if (toggle) toggle.checked = prefs.dark;
+  }
+  const select = $('font-select');
+  if (select && prefs.font) {
+    select.value = prefs.font;
+    if (select.value === prefs.font) root.style.setProperty('--font-mono', prefs.font);
+  }
+  const size = Number(prefs.size);
+  if (size >= 11 && size <= 18) {
+    root.style.setProperty('--msg-size', size + 'px');
+    const range = $('font-size-range'), label = $('font-size-value');
+    if (range) range.value = String(size);
+    if (label) label.textContent = size + 'px';
+  }
+}
+loadAppearance();
 
 export async function loadDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) return;
