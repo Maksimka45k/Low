@@ -4,6 +4,8 @@ import { LIMITS } from './config.js';
 import { $, h, clear, avatar, getUser, linkify, toast, formatTime, getCurrentTime } from './util.js';
 import { chatKey, hasKeys, encryptJson, decryptJson, encryptFile, messageAad } from './crypto.js';
 import { uploadFile, attachmentNode, compressImage } from './media.js';
+import { openForward } from './forward.js';
+import { canSaveGif, saveGifFav } from './gif.js';
 
 let query = null;
 let handlers = null;
@@ -48,7 +50,7 @@ function findNode(id) {
 }
 
 async function decode(chat, msg) {
-  if (msg.v !== 2) return { text: msg.text || '', file: msg.file || null, replyTo: msg.replyTo || null };
+  if (msg.v !== 2) return { text: msg.text || '', file: msg.file || null, replyTo: msg.replyTo || null, fwd: msg.fwd || null };
   const key = await chatKey(chat);
   const data = key && msg.enc ? await decryptJson(key, msg.enc, messageAad(chat.id, msg.from)) : null;
   return data || { text: '🔒 не удалось расшифровать', failed: true };
@@ -66,6 +68,7 @@ async function buildNode(chat, msg, payload) {
   const user = isMe ? state.me : await getUser(msg.from);
   const bubble = h('div', { class: 'message-bubble' });
   if (!isMe && chat.type !== 'dm') bubble.append(h('div', { class: 'message-sender', text: user.name }));
+  if (payload.fwd?.name) bubble.append(h('div', { class: 'forwarded', text: '↪ Переслано от ' + String(payload.fwd.name).slice(0, 40) }));
   if (payload.replyTo) bubble.append(await replyNode(payload.replyTo));
   if (payload.text) bubble.append(h('div', { class: 'message-text' }, linkify(String(payload.text))));
   if (payload.file?.url) bubble.append(attachmentNode(payload.file));
@@ -198,6 +201,8 @@ function showContextMenu(e, id) {
   const { msg, payload } = entry;
   const mine = msg.from === state.me.uid;
   const items = [{ icon: '↩️', label: 'Ответить', run: () => setReply(entry) }];
+  if (!payload.failed) items.push({ icon: '↪️', label: 'Переслать', run: () => openForward(entry) });
+  if (canSaveGif(payload.file)) items.push({ icon: '⭐', label: 'В избранные GIF', run: () => saveGifFav(payload.file) });
   if (mine && payload.text && !payload.failed) items.push({ icon: '✎', label: 'Редактировать', run: () => startEditing(entry) });
   if (payload.text) items.push({ icon: '📋', label: 'Копировать', run: () => copyText(payload.text) });
   if (mine) items.push({ icon: '🗑', label: 'Удалить', danger: true, run: () => db.ref('messages/' + state.chat.id + '/' + id).remove() });
@@ -206,7 +211,7 @@ function showContextMenu(e, id) {
     menu.append(h('div', { class: 'context-item' + (it.danger ? ' danger' : ''), text: it.icon + ' ' + it.label, onclick: () => { it.run(); hideContextMenu(); } }));
   }
   menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
-  menu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
+  menu.style.top = Math.min(e.clientY, window.innerHeight - (items.length * 44 + 20)) + 'px';
   menu.classList.add('show');
 }
 
@@ -343,6 +348,21 @@ function setSending(on) {
   if (!state.editing) $('send-btn').textContent = on ? '⏳' : '➤';
 }
 
+export async function sendPayload(chat, payload) {
+  const { mode, key } = await resolveMode(chat);
+  if (mode === 'blocked') throw new Error('Ключи не загружены. Войдите заново.');
+  if (mode === 'plain' && payload.file?.enc) throw new Error('Зашифрованный файл нельзя переслать в канал');
+  const msg = { from: state.me.uid, at: TS };
+  if (mode === 'enc') {
+    msg.v = 2;
+    msg.enc = await encryptJson(key, payload, messageAad(chat.id, state.me.uid));
+  } else {
+    Object.assign(msg, payload);
+  }
+  await db.ref('messages/' + chat.id).push(msg);
+  await touchChat(chat, mode, payload);
+}
+
 export async function sendGif(file) {
   const chat = state.chat;
   if (!chat || state.sending || state.editing) return;
@@ -411,4 +431,4 @@ export async function sendMessage() {
   } finally {
     setSending(false);
   }
-}
+                      }
