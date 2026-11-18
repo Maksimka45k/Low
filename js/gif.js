@@ -1,16 +1,24 @@
-import { h, clear, $ } from './util.js';
+import { db } from './firebase.js';
+import { h, clear, $, toast, isMobile } from './util.js';
 import { state } from './state.js';
 import { sendGif } from './messages.js';
 import { safeMediaUrl } from './media.js';
-
-// Вставьте сюда ключ с klipy.com/developers (между кавычками).
-const KLIPY_KEY = 'ifvdGO9p4KdxOoBBSkI8cyJtSTINkvYwqjIfcDIjrSz7OtjkDoqPo2xOWDfvm318';
+import { KLIPY_KEY } from './gif-key.js';
 
 const API = 'https://api.klipy.com/api/v1/';
 const PER_PAGE = 24;
+const MAX_FAVS = 100;
+const KLIPY_URL = /^https:\/\/[a-z0-9-]+\.klipy\.com\/[\w.\-/]+$/;
 
-let panel, grid, search, status, cols = [], colH = [0, 0];
-let page = 1, query = '', timer = 0, token = 0, anonId = null, count = 0, hasNext = false, busy = false;
+let panel, back, search, home, grid, status, cols = [], colH = [0, 0];
+let view = 'home', page = 1, query = '', timer = 0, token = 0, anonId = null;
+let count = 0, hasNext = false, busy = false, favs = null;
+
+// Чтобы добавить категорию, допишите строку: { icon: '👋', title: 'Привет', run: () => showAll('hello') }
+const CATEGORIES = [
+  { icon: '⭐', title: 'Избранное', cls: 'fav', run: () => showFav() },
+  { icon: '🔥', title: 'Популярные GIF', run: () => showAll('') }
+];
 
 // Klipy получает не настоящий uid, а производный от него обезличенный идентификатор.
 async function customerId() {
@@ -18,6 +26,54 @@ async function customerId() {
   return [...new Uint8Array(buf)].slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/* ---------- избранное ---------- */
+async function loadFavs() {
+  if (favs) return favs;
+  favs = new Map();
+  try {
+    const val = (await db.ref('gifFavs/' + state.me.uid).once('value')).val() || {};
+    for (const [key, v] of Object.entries(val)) {
+      if (safeMediaUrl(v.url) && safeMediaUrl(v.thumb)) favs.set(v.url, { key, ...v });
+    }
+  } catch {}
+  return favs;
+}
+
+async function favKey(url) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url));
+  return [...new Uint8Array(buf)].slice(0, 10).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function setFav(gif, on) {
+  await loadFavs();
+  const key = await favKey(gif.url);
+  const ref = db.ref('gifFavs/' + state.me.uid + '/' + key);
+  if (on) {
+    if (favs.size >= MAX_FAVS) throw new Error('Максимум ' + MAX_FAVS + ' избранных GIF');
+    const rec = { url: gif.url, thumb: gif.thumb || gif.url, at: Date.now() };
+    if (Number.isFinite(gif.w) && Number.isFinite(gif.h)) { rec.w = gif.w; rec.h = gif.h; }
+    await ref.set(rec);
+    favs.set(gif.url, { key, ...rec });
+  } else {
+    await ref.remove();
+    favs.delete(gif.url);
+  }
+}
+
+export const canSaveGif = file => !!file?.url && KLIPY_URL.test(file.url);
+
+export async function saveGifFav(file) {
+  try {
+    await loadFavs();
+    if (favs.has(file.url)) return toast('Избранные GIF', 'Уже в избранном');
+    await setFav({ url: file.url, thumb: file.url }, true);
+    toast('Избранные GIF', 'GIF сохранён', 'success');
+  } catch (e) {
+    toast('Ошибка', e.message || 'Не удалось сохранить', 'error');
+  }
+}
+
+/* ---------- сетка ---------- */
 function resetCols() {
   clear(grid);
   grid.scrollTop = 0;
@@ -27,10 +83,36 @@ function resetCols() {
   grid.append(...cols);
 }
 
-// Подгрузка следующей страницы, когда прокрутка подходит к концу.
 function more() {
-  if (busy || !hasNext) return;
+  if (view !== 'all' || busy || !hasNext) return;
   if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 300) { page++; load(false); }
+}
+
+function addTile(gif) {
+  const img = h('img', { src: gif.thumb, loading: 'lazy', alt: String(gif.title || 'GIF').slice(0, 80) });
+  const known = Number.isFinite(gif.w) && Number.isFinite(gif.h) && gif.w > 0;
+  if (known) { img.setAttribute('width', String(gif.w)); img.setAttribute('height', String(gif.h)); }
+  const isFav = favs?.has(gif.url);
+  const star = h('button', { class: 'gif-star' + (isFav ? ' on' : ''), title: 'Избранное', text: isFav ? '★' : '☆' });
+  const tile = h('div', { class: 'gif-tile' },
+    h('button', { class: 'gif-pick', title: String(gif.title || 'GIF').slice(0, 80), onclick: () => choose(gif) }, img), star);
+  star.addEventListener('click', async e => {
+    e.stopPropagation();
+    const on = !favs?.has(gif.url);
+    try {
+      await setFav(gif, on);
+    } catch (err) {
+      toast('Ошибка', err.message || 'Не удалось сохранить', 'error');
+      return;
+    }
+    star.textContent = on ? '★' : '☆';
+    star.classList.toggle('on', on);
+    if (view === 'fav' && !on) tile.remove();
+  });
+  const i = colH[0] <= colH[1] ? 0 : 1;
+  colH[i] += known ? gif.h / gif.w : 1;
+  count++;
+  cols[i].append(tile);
 }
 
 function addItem(item) {
@@ -38,18 +120,12 @@ function addItem(item) {
   const thumb = safeMediaUrl(f?.sm?.gif?.url || f?.md?.gif?.url);
   const full = safeMediaUrl(f?.md?.gif?.url || f?.hd?.gif?.url);
   if (!thumb || !full) return;
-  const img = h('img', { src: thumb, loading: 'lazy', alt: String(item.title || 'GIF').slice(0, 80) });
-  const w = f.sm?.gif?.width, ht = f.sm?.gif?.height;
-  if (Number.isFinite(w) && Number.isFinite(ht)) { img.setAttribute('width', String(w)); img.setAttribute('height', String(ht)); }
-  const i = colH[0] <= colH[1] ? 0 : 1;
-  colH[i] += Number.isFinite(w) && Number.isFinite(ht) && w > 0 ? ht / w : 1;
-  count++;
-  cols[i].append(h('button', { title: String(item.title || 'GIF').slice(0, 80), onclick: () => pick(full, f.md?.gif?.size) }, img));
+  addTile({ url: full, thumb, w: f.sm?.gif?.width, h: f.sm?.gif?.height, size: f.md?.gif?.size, title: item.title });
 }
 
 async function load(reset) {
   if (KLIPY_KEY.startsWith('ВСТАВЬТЕ')) {
-    status.textContent = 'Нужен ключ Klipy: вставьте его в js/gif.js';
+    status.textContent = 'Нужен ключ Klipy: вставьте его в js/gif-key.js';
     return;
   }
   const mine = ++token;
@@ -59,6 +135,7 @@ async function load(reset) {
   status.textContent = 'Загрузка…';
   try {
     anonId ||= await customerId();
+    await loadFavs();
     const p = new URLSearchParams({ page: String(page), per_page: String(PER_PAGE), customer_id: anonId, content_filter: 'medium' });
     if (query) p.set('q', query);
     const res = await fetch(API + encodeURIComponent(KLIPY_KEY) + '/gifs/' + (query ? 'search' : 'trending') + '?' + p);
@@ -75,14 +152,51 @@ async function load(reset) {
   }
 }
 
-function pick(url, size) {
+/* ---------- экраны ---------- */
+function setView(v) {
+  view = v;
+  token++;
+  busy = false;
+  hasNext = false;
+  status.textContent = '';
+  home.classList.toggle('hidden', v !== 'home');
+  grid.classList.toggle('hidden', v === 'home');
+  back.classList.toggle('hidden', v === 'home');
+}
+
+function showHome() {
+  setView('home');
+  query = '';
+  search.value = '';
+}
+
+function showAll(q) {
+  setView('all');
+  query = q;
+  search.value = q;
+  load(true);
+}
+
+async function showFav() {
+  setView('fav');
+  search.value = '';
+  resetCols();
+  status.textContent = 'Загрузка…';
+  await loadFavs();
+  if (view !== 'fav') return;
+  const list = [...favs.values()].sort((a, b) => (b.at || 0) - (a.at || 0));
+  list.forEach(addTile);
+  status.textContent = list.length ? 'Избранное: ' + list.length : 'Пока пусто. Нажмите ☆ на любой GIF';
+}
+
+function choose(gif) {
   close();
-  const file = { url, name: 'GIF', type: 'image/gif' };
-  if (Number.isFinite(size)) file.size = size;
+  const file = { url: gif.url, name: 'GIF', type: 'image/gif' };
+  if (Number.isFinite(gif.size)) file.size = gif.size;
   sendGif(file);
 }
 
-const open = () => { panel.classList.remove('hidden'); search.focus(); if (!count) load(true); };
+const open = () => { showHome(); panel.classList.remove('hidden'); if (!isMobile()) search.focus(); };
 const close = () => panel?.classList.add('hidden');
 
 export function initGif() {
@@ -93,18 +207,22 @@ export function initGif() {
     id: 'gif-btn', class: 'btn-icon', title: 'GIF', text: 'GIF',
     onclick: e => { e.stopPropagation(); panel.classList.contains('hidden') ? open() : close(); }
   });
+  back = h('button', { id: 'gif-back', class: 'hidden', title: 'Назад', text: '←', onclick: showHome });
   search = h('input', { id: 'gif-search', placeholder: 'Поиск GIF…', maxlength: '60', autocomplete: 'off' });
   search.addEventListener('input', () => {
     clearTimeout(timer);
-    timer = setTimeout(() => { query = search.value.trim(); load(true); }, 450);
+    timer = setTimeout(() => showAll(search.value.trim()), 450);
   });
-  grid = h('div', { id: 'gif-grid' });
+  home = h('div', { id: 'gif-home' }, CATEGORIES.map(c =>
+    h('button', { class: 'gif-cat ' + (c.cls || ''), onclick: c.run }, h('span', { text: c.icon }), h('b', { text: c.title }))));
+  grid = h('div', { id: 'gif-grid', class: 'hidden' });
   status = h('span', { text: '' });
-  panel = h('div', { id: 'gif-panel', class: 'hidden' }, search, grid, h('div', { id: 'gif-foot' }, status));
+  panel = h('div', { id: 'gif-panel', class: 'hidden' },
+    h('div', { id: 'gif-head' }, back, search), home, grid, h('div', { id: 'gif-foot' }, status));
   resetCols();
   grid.addEventListener('scroll', more);
   attach.after(btn);
   area.append(panel);
   document.addEventListener('click', e => { if (!panel.contains(e.target) && e.target !== btn) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-}
+                        }
