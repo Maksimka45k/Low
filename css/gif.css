@@ -23,4 +23,4 @@
 #forward-list { max-height: 45vh; overflow-y: auto; margin: 10px 0; }
 #forward-list .chat-item { cursor: pointer; }
 #forward-list .hidden { display: none; }
-           
+.row .btn { width: auto; flex: none; }
