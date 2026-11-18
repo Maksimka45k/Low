@@ -45,6 +45,28 @@ function scrollBottom() {
   box.scrollTop = box.scrollHeight;
 }
 
+// Картинки, GIF и расшифрованные файлы подгружаются позже и раздвигают переписку.
+// Пока идёт подгрузка (до 8 секунд) и пользователь сам не прокручивает, держим чат внизу.
+let stick = false, stickTimer = 0, pinReady = false;
+
+function ensurePin() {
+  if (pinReady) return;
+  pinReady = true;
+  const box = $('messages');
+  const onMedia = () => { if (stick) scrollBottom(); };
+  box.addEventListener('load', onMedia, true);
+  box.addEventListener('loadedmetadata', onMedia, true);
+  for (const ev of ['wheel', 'touchmove', 'keydown', 'mousedown']) box.addEventListener(ev, () => { stick = false; }, { passive: true });
+}
+
+function pinBottom() {
+  ensurePin();
+  stick = true;
+  clearTimeout(stickTimer);
+  stickTimer = setTimeout(() => { stick = false; }, 8000);
+  scrollBottom();
+}
+
 function findNode(id) {
   return $('messages').querySelector('[data-id="' + CSS.escape(id) + '"]');
 }
@@ -97,7 +119,7 @@ async function addMessage(chat, msg, live) {
     else break;
   }
   box.insertBefore(node, before);
-  if (live && (msg.from === state.me.uid || nearBottom)) scrollBottom();
+  if (live && (msg.from === state.me.uid || nearBottom)) pinBottom();
   if (live && msg.from !== state.me.uid && document.visibilityState === 'visible') {
     db.ref('chats/' + chat.id + '/unread/' + state.me.uid).set(0);
   }
@@ -162,7 +184,7 @@ export function startMessages() {
   query.on('child_removed', handlers.removed, fail);
   query.once('value', snap => enqueue(() => {
     ready = true;
-    scrollBottom();
+    pinBottom();
     if (snap.numChildren() >= LIMITS.page) addOlderButton(chat);
   }), fail);
 }
@@ -431,4 +453,4 @@ export async function sendMessage() {
   } finally {
     setSending(false);
   }
-                      }
+}
