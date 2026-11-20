@@ -7,6 +7,7 @@ import { startPresence, stopPresence } from './presence.js';
 import { initGif } from './gif.js';
 import { ensureSavedChat } from './saved.js';
 import { initSwipeBack } from './swipe.js';
+import { initActivities } from './activities.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
 import { askDeleteChat, deleteChatSelf, deleteChatBoth, createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
 import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, listenForCalls, stopCalls } from './calls.js';
@@ -114,6 +115,7 @@ $('font-size-range').addEventListener('input', e => setFontSize(e.target.value))
 document.querySelectorAll('.color-option').forEach(el => { el.style.background = el.dataset.arg; });
 window.addEventListener('resize', updatePanels);
 initGif();
+initActivities();
 initSwipeBack();
 
 function onReady() {
@@ -139,4 +141,3 @@ function onLogout() {
 }
 
 initAuth({ onReady, onLogout });
-  
