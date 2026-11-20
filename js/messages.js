@@ -6,6 +6,7 @@ import { chatKey, hasKeys, encryptJson, decryptJson, encryptFile, messageAad } f
 import { uploadFile, attachmentNode, compressImage } from './media.js';
 import { openForward } from './forward.js';
 import { canSaveGif, saveGifFav } from './gif.js';
+import { activityNode } from './activities.js';
 
 let query = null;
 let handlers = null;
@@ -92,8 +93,12 @@ async function buildNode(chat, msg, payload) {
   if (!isMe && chat.type !== 'dm') bubble.append(h('div', { class: 'message-sender', text: user.name }));
   if (payload.fwd?.name) bubble.append(h('div', { class: 'forwarded', text: '↪ Переслано от ' + String(payload.fwd.name).slice(0, 40) }));
   if (payload.replyTo) bubble.append(await replyNode(payload.replyTo));
-  if (payload.text) bubble.append(h('div', { class: 'message-text' }, linkify(String(payload.text))));
-  if (payload.file?.url) bubble.append(attachmentNode(payload.file));
+  if (payload.act) {
+    bubble.append(activityNode(payload, msg));
+  } else {
+    if (payload.text) bubble.append(h('div', { class: 'message-text' }, linkify(String(payload.text))));
+    if (payload.file?.url) bubble.append(attachmentNode(payload.file));
+  }
   if (msg.edited) bubble.append(h('span', { class: 'edited-mark', text: '(изменено)' }));
   bubble.append(h('div', { class: 'message-time', text: formatTime(msg.at) + (isMe ? ' ✓✓' : '') }));
   return h('div', {
@@ -223,7 +228,7 @@ function showContextMenu(e, id) {
   const { msg, payload } = entry;
   const mine = msg.from === state.me.uid;
   const items = [{ icon: '↩️', label: 'Ответить', run: () => setReply(entry) }];
-  if (!payload.failed) items.push({ icon: '↪️', label: 'Переслать', run: () => openForward(entry) });
+  if (!payload.failed && !payload.act) items.push({ icon: '↪️', label: 'Переслать', run: () => openForward(entry) });
   if (canSaveGif(payload.file)) items.push({ icon: '⭐', label: 'В избранные GIF', run: () => saveGifFav(payload.file) });
   if (mine && payload.text && !payload.failed) items.push({ icon: '✎', label: 'Редактировать', run: () => startEditing(entry) });
   if (payload.text) items.push({ icon: '📋', label: 'Копировать', run: () => copyText(payload.text) });
@@ -313,7 +318,7 @@ export function resetComposer() {
   autoResize(input);
 }
 
-async function uploadAttachment(file, encrypted) {
+export async function uploadAttachment(file, encrypted) {
   file = await compressImage(file);
   const limit = encrypted ? LIMITS.encryptedFile : LIMITS.plainFile;
   if (file.size > limit) throw new Error('Файл больше ' + limit / 1048576 + ' MB');
