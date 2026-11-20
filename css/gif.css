@@ -24,3 +24,68 @@
 #forward-list .chat-item { cursor: pointer; }
 #forward-list .hidden { display: none; }
 .row .btn { width: auto; flex: none; }
+
+/* ---- активности ---- */
+.act-sheet { width: min(640px, 94vw); max-height: 90vh; overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+.act-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.act-head h2 { margin: 0 0 2px; font-size: 20px; }
+.act-head p { margin: 0; font-size: 12px; color: var(--text-muted); }
+.act-close { border: 0; background: transparent; color: var(--text-muted); font-size: 18px; cursor: pointer; }
+.act-cat { margin: 16px 0 8px; font-size: 14px; font-weight: 700; }
+.act-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.act-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; border: 0; border-radius: 12px; background: var(--bg-tertiary); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.act-card:hover:not(:disabled) { outline: 1px solid var(--accent); }
+.act-card.soon { opacity: 0.45; cursor: default; }
+.act-ico { font-size: 26px; margin-bottom: 6px; }
+.act-card b { font-size: 14px; }
+.act-card small { font-size: 11px; color: var(--text-muted); }
+.act-error { font-size: 12px; color: var(--text-muted); }
+.act-wheel { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.wheel { width: 260px; max-width: 100%; height: auto; aspect-ratio: 1; cursor: pointer; }
+.wheel-title { font-weight: 700; font-size: 14px; text-align: center; }
+.wheel-result { font-size: 13px; font-weight: 700; min-height: 18px; }
+.wheel-preview { display: flex; justify-content: center; margin: 8px 0; }
+#wheel-title, #wheel-options { width: 100%; box-sizing: border-box; margin: 6px 0; padding: 9px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: inherit; resize: vertical; }
+.scratch { position: relative; display: inline-block; max-width: 100%; border-radius: 10px; overflow: hidden; }
+.scratch .message-file-name { display: none; }
+.scratch-cover { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; transition: opacity 0.4s; }
+.scratch-cover.gone { opacity: 0; pointer-events: none; }
+.scratch-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 13px; text-shadow: 0 1px 4px rgba(0,0,0,0.5); pointer-events: none; }
+.act-whoami { display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
+.whoami-hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+.whoami-list { display: flex; flex-direction: column; gap: 6px; }
+.whoami-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 13px; }
+.whoami-reveal { width: auto; align-self: flex-start; padding: 8px 14px; }
+#whoami-cat { width: 100%; padding: 9px 12px; margin: 8px 0; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: inherit; }
+#whoami-players { max-height: 30vh; overflow-y: auto; }
+.whoami-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.whoami-actions .btn, .whoami-guess .btn { width: auto; padding: 8px 14px; }
+.whoami-guess { display: flex; gap: 6px; align-items: center; }
+.whoami-input { flex: 1; min-width: 0; padding: 9px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: inherit; }
+.whoami-end { font-size: 13px; font-weight: 700; text-align: center; padding: 6px 0; }
+.whoami-status { font-size: 13px; }
+
+/* кнопки рядом с полем ввода: по высоте поля, а не прижаты книзу */
+.input-area > .btn-icon { height: 46px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding-top: 0; padding-bottom: 0; }
+.input-area:has(#file-options:not(.hidden)) > .btn-icon { margin-bottom: 40px; }
+
+/* ---- рисовалка ---- */
+.draw-sheet { width: min(1000px, 98vw); max-height: 96vh; display: flex; flex-direction: column; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 10px; }
+.draw-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.draw-btn { min-width: 36px; height: 36px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text); font: inherit; font-size: 15px; cursor: pointer; }
+.draw-btn.wide { font-size: 12px; }
+.draw-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.draw-btn:disabled { opacity: 0.35; cursor: default; }
+.draw-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); cursor: pointer; padding: 0; }
+.draw-swatch.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.draw-color { width: 30px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; }
+.draw-size { width: 90px; }
+.draw-size-label { font-size: 11px; color: var(--text-muted); min-width: 38px; }
+.draw-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.draw-grow { flex: 1; }
+.draw-stage { position: relative; width: min(100%, calc(66vh * 1.5)); aspect-ratio: 3 / 2; margin: 0 auto; border-radius: 8px; overflow: hidden; }
+.draw-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#draw-top { touch-action: none; cursor: crosshair; }
+.draw-open { width: auto; align-self: flex-start; padding: 8px 14px; }
+.draw-bgs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.draw-bg { height: 56px; border: 2px solid var(--border); border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
