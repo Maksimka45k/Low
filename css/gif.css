@@ -73,6 +73,8 @@
 .draw-sheet { width: min(1000px, 98vw); max-height: 96vh; display: flex; flex-direction: column; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 10px; }
 .draw-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .draw-btn { min-width: 36px; height: 36px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text); font: inherit; font-size: 15px; cursor: pointer; }
+.draw-btn { display: inline-flex; align-items: center; justify-content: center; }
+.draw-btn svg { display: block; }
 .draw-btn.wide { font-size: 12px; }
 .draw-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .draw-btn:disabled { opacity: 0.35; cursor: default; }
