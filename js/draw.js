@@ -11,8 +11,10 @@ import { resolveMode, sendPayload, uploadAttachment } from './messages.js';
  * Ластик — это штрих цвета фона, поэтому его тоже можно отменить.
  */
 const W = 1200, H = 800, TAU = Math.PI * 2;
-const TOOLS = [['pen', '✏️', 'Кисть'], ['eraser', '🧽', 'Ластик'], ['fill', '🪣', 'Заливка'], ['line', '╱', 'Линия'], ['rect', '▭', 'Прямоугольник'], ['ellipse', '◯', 'Овал']];
+const TOOLS = [['pen', '✏️', 'Кисть'], ['eraser', '🧽', 'Ластик'], ['fill', 'bucket', 'Заливка'], ['line', '╱', 'Линия'], ['rect', '▭', 'Прямоугольник'], ['ellipse', '◯', 'Овал']];
 const FILL_TOL = 60;
+// Эмодзи-ведро есть не в каждом шрифте, поэтому иконка заливки нарисована как SVG.
+const BUCKET = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l7-7 8 8-7 7z"/><path d="M19 16c0 0-2 2.2-2 3.5a2 2 0 0 0 4 0c0-1.3-2-3.5-2-3.5z" fill="currentColor"/></svg>';
 const TOOL_IDS = new Set(TOOLS.map(t => t[0]));
 const SHAPES = new Set(['line', 'rect', 'ellipse']);
 const PALETTE = ['#111111', '#ffffff', '#ff4757', '#ff9f43', '#feca57', '#2ed573', '#1e90ff', '#6c5ce7', '#ff6b9d', '#8b5a2b'];
@@ -399,7 +401,11 @@ function closeDraw() {
 function ensureModal() {
   if ($('draw-modal')) return;
   const tools = [
-    ...TOOLS.map(([id, icon, title]) => h('button', { class: 'draw-btn draw-tool', title, text: icon, 'data-tool': id, onclick: () => { D.tool = id; syncUI(); } })),
+    ...TOOLS.map(([id, icon, title]) => {
+      const b = h('button', { class: 'draw-btn draw-tool', title, text: icon === 'bucket' ? '' : icon, 'data-tool': id, onclick: () => { D.tool = id; syncUI(); } });
+      if (icon === 'bucket') b.innerHTML = BUCKET;
+      return b;
+    }),
     h('button', { class: 'draw-btn draw-tool', title: 'Рука: двигать холст (или пробел и перетаскивание)', text: '✋', 'data-tool': 'hand', onclick: () => { D.tool = 'hand'; syncUI(); } })
   ];
   const swatches = PALETTE.map(c => {
