@@ -193,7 +193,7 @@ function scratchNode(payload, msg) {
   const key = 'scratch:' + msg.id;
   if (msg.from === state.me.uid || seen.has(key)) return wrap;
   const canvas = h('canvas', { class: 'scratch-cover' });
-  wrap.append(canvas, h('div', { class: 'scratch-hint', text: '🪙 Сотрите, чтобы открыть' }));
+  wrap.append(canvas, h('div', { class: 'scratch-hint', text: '👆 Сотрите, чтобы открыть' }));
   let down = false, last = null, lastCheck = 0, size = '';
   const ctx = () => canvas.getContext('2d', { willReadFrequently: true });
 
