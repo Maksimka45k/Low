@@ -11,7 +11,8 @@ import { resolveMode, sendPayload, uploadAttachment } from './messages.js';
  * Ластик — это штрих цвета фона, поэтому его тоже можно отменить.
  */
 const W = 1200, H = 800, TAU = Math.PI * 2;
-const TOOLS = [['pen', '✏️', 'Кисть'], ['eraser', '🧽', 'Ластик'], ['line', '╱', 'Линия'], ['rect', '▭', 'Прямоугольник'], ['ellipse', '◯', 'Овал']];
+const TOOLS = [['pen', '✏️', 'Кисть'], ['eraser', '🧽', 'Ластик'], ['fill', '🪣', 'Заливка'], ['line', '╱', 'Линия'], ['rect', '▭', 'Прямоугольник'], ['ellipse', '◯', 'Овал']];
+const FILL_TOL = 60;
 const TOOL_IDS = new Set(TOOLS.map(t => t[0]));
 const SHAPES = new Set(['line', 'rect', 'ellipse']);
 const PALETTE = ['#111111', '#ffffff', '#ff4757', '#ff9f43', '#feca57', '#2ed573', '#1e90ff', '#6c5ce7', '#ff6b9d', '#8b5a2b'];
@@ -48,8 +49,45 @@ function drawShape(ctx, tool, a, b) {
   ctx.stroke();
 }
 
+// Заливка работает как «ведро»: красит область одного цвета, ограниченную линиями.
+function floodFill(ctx, sx, sy, hex) {
+  const img = ctx.getImageData(0, 0, W, H), d = img.data;
+  const idx = (x, y) => (y * W + x) * 4;
+  const i0 = idx(sx, sy), tr = d[i0], tg = d[i0 + 1], tb = d[i0 + 2];
+  const fr = parseInt(hex.slice(1, 3), 16), fg = parseInt(hex.slice(3, 5), 16), fb = parseInt(hex.slice(5, 7), 16);
+  if (Math.abs(tr - fr) < 3 && Math.abs(tg - fg) < 3 && Math.abs(tb - fb) < 3) return;
+  const match = i => Math.abs(d[i] - tr) <= FILL_TOL && Math.abs(d[i + 1] - tg) <= FILL_TOL && Math.abs(d[i + 2] - tb) <= FILL_TOL;
+  const seen = new Uint8Array(W * H);
+  const stack = [sx, sy];
+  while (stack.length) {
+    const y = stack.pop(), x = stack.pop();
+    if (seen[y * W + x] || !match(idx(x, y))) continue;
+    let xl = x, xr = x;
+    while (xl > 0 && !seen[y * W + xl - 1] && match(idx(xl - 1, y))) xl--;
+    while (xr < W - 1 && !seen[y * W + xr + 1] && match(idx(xr + 1, y))) xr++;
+    for (let i = xl; i <= xr; i++) {
+      const k = idx(i, y);
+      d[k] = fr; d[k + 1] = fg; d[k + 2] = fb; d[k + 3] = 255;
+      seen[y * W + i] = 1;
+    }
+    for (const ny of [y - 1, y + 1]) {
+      if (ny < 0 || ny >= H) continue;
+      let run = false;
+      for (let i = xl; i <= xr; i++) {
+        const ok = !seen[ny * W + i] && match(idx(i, ny));
+        if (ok && !run) { stack.push(i, ny); run = true; } else if (!ok) run = false;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
 function paintStroke(ctx, st, from = 0) {
   const p = st.pts;
+  if (st.tool === 'fill') {
+    if (from === 0 && ctx === D.main) floodFill(ctx, p[0][0], p[0][1], st.color);
+    return;
+  }
   ctx.save();
   ctx.strokeStyle = ctx.fillStyle = st.color;
   ctx.lineWidth = st.size;
@@ -180,10 +218,86 @@ function flush() {
   emit({ k: 's', sid: c.sid, tool: c.tool, color: c.color, size: c.size, pts });
 }
 
+/* ---------- масштаб и перемещение ---------- */
+const stageRect = () => D.stageEl.getBoundingClientRect();
+
+function applyView() {
+  const v = D.view, r = stageRect();
+  v.z = Math.max(1, Math.min(8, v.z));
+  v.x = Math.max(r.width * (1 - v.z), Math.min(0, v.x));
+  v.y = Math.max(r.height * (1 - v.z), Math.min(0, v.y));
+  D.zoomEl.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.z + ')';
+  $('draw-zoom-label').textContent = Math.round(v.z * 100) + '%';
+}
+
+function zoomAt(px, py, factor) {
+  const v = D.view, z = Math.max(1, Math.min(8, v.z * factor)), k = z / v.z;
+  v.x = px - (px - v.x) * k;
+  v.y = py - (py - v.y) * k;
+  v.z = z;
+  applyView();
+}
+
+function zoomCenter(f) {
+  const r = stageRect();
+  zoomAt(r.width / 2, r.height / 2, f);
+}
+
+function panBy(dx, dy) {
+  D.view.x += dx;
+  D.view.y += dy;
+  applyView();
+}
+
+// Если второй палец коснулся сразу после первого, это жест, а не штрих: недорисованное отбрасывается.
+function cancelStroke() {
+  const c = D.cur;
+  if (!c) return;
+  clearInterval(D.timer);
+  D.preview.clearRect(0, 0, W, H);
+  if (!SHAPES.has(c.tool) && c.sent > 0) { flush(); D.cur = null; }
+  else { D.cur = null; redraw(); }
+}
+
+function gesturePoints() {
+  const [a, b] = [...D.pointers.values()], r = stageRect();
+  return { dist: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, mx: (a[0] + b[0]) / 2 - r.left, my: (a[1] + b[1]) / 2 - r.top };
+}
+
+function startGesture() {
+  cancelStroke();
+  D.pan = null;
+  D.dead = true;
+  D.gesture = { ...gesturePoints(), z: D.view.z, x: D.view.x, y: D.view.y };
+}
+
+function updateGesture() {
+  const g = D.gesture, p = gesturePoints(), v = D.view;
+  const z = Math.max(1, Math.min(8, (g.z * p.dist) / g.dist));
+  v.x = p.mx - ((g.mx - g.x) / g.z) * z;
+  v.y = p.my - ((g.my - g.y) / g.z) * z;
+  v.z = z;
+  applyView();
+}
+
+/* ---------- ввод ---------- */
 function onDown(e) {
-  if (!D || !e.isPrimary || e.button > 0) return;
+  if (!D) return;
+  D.pointers.set(e.pointerId, [e.clientX, e.clientY]);
   D.topEl.setPointerCapture(e.pointerId);
-  D.cur = { sid: nonce(), tool: D.tool, color: D.tool === 'eraser' ? D.bg : D.color, size: D.size, pts: [pos(e)], sent: 0 };
+  if (D.pointers.size >= 2) return startGesture();
+  if (D.dead) return;
+  if (e.button === 1 || D.space || D.tool === 'hand') { D.pan = [e.clientX, e.clientY]; return; }
+  if (e.button > 0) return;
+  const p = pos(e);
+  if (D.tool === 'fill') {
+    const st = { sid: nonce(), tool: 'fill', color: D.color, size: 1, pts: [p] };
+    paintStroke(D.main, st, 0);
+    D.local.add(st.sid);
+    emit({ k: 's', sid: st.sid, tool: 'fill', color: st.color, size: 1, pts: [p] });
+    return;
+  }
+  D.cur = { sid: nonce(), tool: D.tool, color: D.tool === 'eraser' ? D.bg : D.color, size: D.size, pts: [p], sent: 0 };
   if (!SHAPES.has(D.tool)) {
     paintStroke(D.main, D.cur, 0);
     D.timer = setInterval(flush, 150);
@@ -191,7 +305,15 @@ function onDown(e) {
 }
 
 function onMove(e) {
-  const c = D?.cur;
+  if (!D) return;
+  if (D.pointers.has(e.pointerId)) D.pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (D.gesture && D.pointers.size >= 2) return updateGesture();
+  if (D.pan) {
+    panBy(e.clientX - D.pan[0], e.clientY - D.pan[1]);
+    D.pan = [e.clientX, e.clientY];
+    return;
+  }
+  const c = D.cur;
   if (!c) return;
   const p = pos(e);
   if (SHAPES.has(c.tool)) {
@@ -207,8 +329,12 @@ function onMove(e) {
   if (c.pts.length - c.sent >= 40) flush();
 }
 
-function onUp() {
-  const c = D?.cur;
+function onUp(e) {
+  if (!D) return;
+  D.pointers.delete(e.pointerId);
+  if (D.pointers.size < 2) D.gesture = null;
+  if (!D.pointers.size) { D.pan = null; D.dead = false; }
+  const c = D.cur;
   if (!c) return;
   clearInterval(D.timer);
   if (SHAPES.has(c.tool)) {
@@ -233,6 +359,7 @@ function syncUI() {
   $('draw-undo').disabled = !D.mine.length;
   $('draw-redo').disabled = !D.redo.length;
   $('draw-size-label').textContent = D.size + ' px';
+  D.topEl.classList.toggle('pan', D.tool === 'hand');
 }
 
 async function exportBlob() {
@@ -271,18 +398,18 @@ function closeDraw() {
 
 function ensureModal() {
   if ($('draw-modal')) return;
-  const tools = TOOLS.map(([id, icon, title]) => h('button', {
-    class: 'draw-btn draw-tool', title, text: icon, 'data-tool': id,
-    onclick: () => { D.tool = id; syncUI(); }
-  }));
+  const tools = [
+    ...TOOLS.map(([id, icon, title]) => h('button', { class: 'draw-btn draw-tool', title, text: icon, 'data-tool': id, onclick: () => { D.tool = id; syncUI(); } })),
+    h('button', { class: 'draw-btn draw-tool', title: 'Рука: двигать холст (или пробел и перетаскивание)', text: '✋', 'data-tool': 'hand', onclick: () => { D.tool = 'hand'; syncUI(); } })
+  ];
   const swatches = PALETTE.map(c => {
-    const b = h('button', { class: 'draw-swatch', title: c, 'data-color': c, onclick: () => { D.color = c; if (D.tool === 'eraser') D.tool = 'pen'; colorInput.value = c; syncUI(); } });
+    const b = h('button', { class: 'draw-swatch', title: c, 'data-color': c, onclick: () => { D.color = c; if (D.tool === 'eraser' || D.tool === 'hand') D.tool = 'pen'; colorInput.value = c; syncUI(); } });
     b.style.background = c;
     return b;
   });
   const colorInput = h('input', { type: 'color', class: 'draw-color', title: 'Свой цвет' });
   colorInput.value = PALETTE[0];
-  colorInput.addEventListener('input', () => { D.color = colorInput.value; if (D.tool === 'eraser') D.tool = 'pen'; syncUI(); });
+  colorInput.addEventListener('input', () => { D.color = colorInput.value; if (D.tool === 'eraser' || D.tool === 'hand') D.tool = 'pen'; syncUI(); });
   const size = h('input', { type: 'range', min: '2', max: '60', value: '6', class: 'draw-size', title: 'Толщина' });
   size.addEventListener('input', () => { D.size = Number(size.value); syncUI(); });
   const mainEl = h('canvas', { id: 'draw-main', width: String(W), height: String(H) });
@@ -291,11 +418,24 @@ function ensureModal() {
   topEl.addEventListener('pointermove', onMove);
   topEl.addEventListener('pointerup', onUp);
   topEl.addEventListener('pointercancel', onUp);
+  const zoomEl = h('div', { class: 'draw-zoom', id: 'draw-zoom' }, mainEl, topEl);
+  const stageEl = h('div', { class: 'draw-stage', id: 'draw-stage' }, zoomEl);
+  // Ctrl + колёсико (и щипок на тачпаде) — масштаб в точке курсора; обычное колёсико двигает холст.
+  stageEl.addEventListener('wheel', e => {
+    if (!D) return;
+    e.preventDefault();
+    const k = e.deltaMode === 1 ? 33 : 1, r = stageRect();
+    if (e.ctrlKey) zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * k * 0.0025));
+    else panBy(-e.deltaX * k, -e.deltaY * k);
+  }, { passive: false });
   document.addEventListener('keydown', e => {
-    if (!D || $('draw-modal').classList.contains('hidden') || !(e.ctrlKey || e.metaKey)) return;
+    if (!D || $('draw-modal').classList.contains('hidden')) return;
+    if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) { D.space = true; e.preventDefault(); return; }
+    if (!(e.ctrlKey || e.metaKey)) return;
     if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); }
   });
+  document.addEventListener('keyup', e => { if (D && e.code === 'Space') D.space = false; });
   document.body.append(h('div', { class: 'modal-overlay hidden', id: 'draw-modal' },
     h('div', { class: 'draw-sheet' },
       h('div', { class: 'draw-bar' }, tools,
@@ -304,11 +444,15 @@ function ensureModal() {
         h('span', { class: 'draw-sep' }),
         h('button', { id: 'draw-undo', class: 'draw-btn', title: 'Отменить (Ctrl+Z)', text: '↶', onclick: undo }),
         h('button', { id: 'draw-redo', class: 'draw-btn', title: 'Повторить (Ctrl+Y)', text: '↷', onclick: redo }),
+        h('span', { class: 'draw-sep' }),
+        h('button', { class: 'draw-btn', title: 'Отдалить', text: '−', onclick: () => zoomCenter(1 / 1.4) }),
+        h('button', { id: 'draw-zoom-label', class: 'draw-btn wide', title: 'Сбросить масштаб', text: '100%', onclick: () => { D.view = { z: 1, x: 0, y: 0 }; applyView(); } }),
+        h('button', { class: 'draw-btn', title: 'Приблизить', text: '+', onclick: () => zoomCenter(1.4) }),
         h('span', { class: 'draw-grow' }),
         h('button', { class: 'draw-btn wide', title: 'Отправить рисунок в чат', text: '📤 В чат', onclick: saveToChat }),
         h('button', { class: 'draw-btn', title: 'Скачать PNG', text: '⬇', onclick: download }),
         h('button', { class: 'draw-btn', title: 'Закрыть', text: '✕', onclick: closeDraw })),
-      h('div', { class: 'draw-stage' }, mainEl, topEl))));
+      stageEl)));
 }
 
 export async function openDraw(chat, act) {
@@ -322,13 +466,16 @@ export async function openDraw(chat, act) {
     chat, id: act.id, bg: act.bg, key, ref: db.ref('activities/' + chat.id + '/' + act.id),
     log: [], keys: new Set(), strokes: new Map(), order: [], hidden: new Set(), local: new Set(),
     mine: [], redo: [], ready: false, tool: 'pen', color: PALETTE[0], size: 6, cur: null, timer: 0,
-    mainEl, topEl, main: mainEl.getContext('2d'), preview: topEl.getContext('2d')
+    mainEl, topEl, main: mainEl.getContext('2d', { willReadFrequently: true }), preview: topEl.getContext('2d'),
+    stageEl: $('draw-stage'), zoomEl: $('draw-zoom'), view: { z: 1, x: 0, y: 0 },
+    pointers: new Map(), gesture: null, pan: null, dead: false, space: false
   };
   $('draw-modal').querySelector('.draw-size').value = '6';
   $('draw-modal').querySelector('.draw-color').value = PALETTE[0];
   redraw();
   recompute();
   showModal('draw-modal');
+  applyView();
   session.ref.on('child_added', onChild, () => toast('Рисовалка', 'Нет доступа к рисунку', 'error'));
   session.ref.once('value', () => enqueue(() => {
     if (D !== session) return;
