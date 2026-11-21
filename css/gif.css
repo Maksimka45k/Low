@@ -84,7 +84,10 @@
 .draw-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
 .draw-grow { flex: 1; }
 .draw-stage { position: relative; width: min(100%, calc(66vh * 1.5)); aspect-ratio: 3 / 2; margin: 0 auto; border-radius: 8px; overflow: hidden; }
+.draw-stage { touch-action: none; }
+.draw-zoom { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
 .draw-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#draw-top.pan { cursor: grab; }
 #draw-top { touch-action: none; cursor: crosshair; }
 .draw-open { width: auto; align-self: flex-start; padding: 8px 14px; }
 .draw-bgs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
