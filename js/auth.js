@@ -7,6 +7,9 @@ const DOMAIN = '@low.local';
 const BAD_LOGIN = ['auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'];
 const BAD_UNLOCK = ['auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'];
 const LABELS = { login: ['ВОЙТИ →', 'ВХОД...'], register: ['СОЗДАТЬ →', 'СОЗДАНИЕ...'] };
+const TOS_VERSION = '2026-11-23';
+const TOS_ERROR = 'Для продолжения нужно принять Пользовательское соглашение';
+const tosAccepted = form => $(form + '-tos').checked;
 
 let hooks = null;
 let unlockResolver = null;
@@ -39,6 +42,7 @@ export async function handleLogin() {
   lastForm = 'login';
   showError('');
   if (!nick || !password) { showError('Заполните поля'); return; }
+  if (!tosAccepted('login')) { showError(TOS_ERROR); return; }
   setBusy(true, 'login');
   state.pendingPassword = password;
   try {
@@ -62,6 +66,7 @@ export async function handleRegister() {
   if (!name || !nick || !password) { showError('Заполните поля'); return; }
   if (nick.length < 3) { showError('Никнейм минимум 3 символа'); return; }
   if (password.length < 6) { showError('Пароль минимум 6 символов'); return; }
+  if (!tosAccepted('register')) { showError(TOS_ERROR); return; }
   setBusy(true, 'register');
   state.registering = true;
   state.pendingPassword = password;
@@ -85,12 +90,16 @@ export async function handleRegister() {
     fail(e.code === 'PERMISSION_DENIED' ? 'Никнейм занят' : 'Ошибка: ' + e.message);
     return;
   }
+  const profile = { uid: cred.user.uid, nick, name, color: colorFromNick(nick), status: '', createdAt: TS };
   try {
-    await db.ref('users/' + cred.user.uid).set({
-      uid: cred.user.uid, nick, name, color: colorFromNick(nick), status: '', createdAt: TS
-    });
-  } catch (e) {
-    console.warn('profile write failed, will retry on session start', e.message);
+    // фиксируем факт и версию согласия; если правила БД не пускают новые поля — пишем профиль без них
+    await db.ref('users/' + cred.user.uid).set({ ...profile, tosVersion: TOS_VERSION, tosAcceptedAt: TS });
+  } catch {
+    try {
+      await db.ref('users/' + cred.user.uid).set(profile);
+    } catch (e) {
+      console.warn('profile write failed, will retry on session start', e.message);
+    }
   }
   state.registering = false;
   await startSession(cred.user);
@@ -194,6 +203,7 @@ function teardown() {
   $('app').classList.add('hidden');
   $('auth').classList.remove('hidden');
   for (const id of ['login-nick', 'login-password', 'register-name', 'register-nick', 'register-password']) $(id).value = '';
+  for (const id of ['login-tos', 'register-tos']) $(id).checked = false;
 }
 
 export async function logout() {
