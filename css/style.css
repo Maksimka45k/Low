@@ -327,6 +327,9 @@
 .tos-body { max-height: 60vh; overflow-y: auto; padding-right: 8px; font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
 .tos-body p { margin-bottom: 12px; }
 .tos-date { font-size: 10px; margin-top: 16px; }
+.tos-check { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 8px; font-size: 11px; line-height: 1.5; color: var(--text-secondary); cursor: pointer; user-select: none; }
+.tos-check input { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+.tos-check .link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: left; }
 .unlock-text { font-size: 12px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 16px; }
 .profile-head { display: flex; gap: 20px; align-items: center; margin-bottom: 24px; }
 .profile-name { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
