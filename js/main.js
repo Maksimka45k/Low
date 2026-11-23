@@ -98,6 +98,8 @@ document.querySelectorAll('.modal-overlay:not([data-lock])').forEach(el =>
   el.addEventListener('click', e => { if (e.target === el) el.classList.add('hidden'); }));
 
 const onEnter = (id, fn) => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') fn(); });
+for (const form of ['login', 'register'])
+  $(form + '-tos').addEventListener('change', () => { $(form + '-error').textContent = ''; });
 onEnter('login-nick', handleLogin);
 onEnter('login-password', handleLogin);
 onEnter('register-password', handleRegister);
