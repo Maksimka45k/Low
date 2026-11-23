@@ -94,3 +94,41 @@
 .draw-open { width: auto; align-self: flex-start; padding: 8px 14px; }
 .draw-bgs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
 .draw-bg { height: 56px; border: 2px solid var(--border); border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* ---- игры: wordle и крестики-нолики ---- */
+.game-sheet { width: min(420px, 96vw); max-height: 94vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.game-head { display: flex; justify-content: space-between; align-items: center; }
+.game-head h3 { margin: 0; }
+.game-sub { font-size: 12px; color: var(--text-muted); }
+.game-status { font-weight: 700; text-align: center; min-height: 20px; font-size: 14px; }
+.ttt-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ttt-cell { aspect-ratio: 1; border: 0; border-radius: 12px; background: var(--bg-tertiary); color: var(--text); font: inherit; font-size: 40px; font-weight: 800; cursor: pointer; }
+.ttt-cell:disabled { cursor: default; }
+.ttt-cell.x { color: var(--accent); }
+.ttt-cell.o { color: #ffd54a; }
+.ttt-cell.win { outline: 3px solid #3fa56b; }
+.wd-board { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.wd-row { display: grid; grid-template-columns: repeat(5, 46px); gap: 6px; }
+.wd-cell { height: 46px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--border); border-radius: 8px; font-weight: 800; font-size: 22px; text-transform: uppercase; }
+.wd-cell.filled { border-color: var(--text-muted); }
+.wd-cell.g, .wd-key.g { background: #3fa56b; border-color: #3fa56b; color: #fff; }
+.wd-cell.y, .wd-key.y { background: #c9a227; border-color: #c9a227; color: #fff; }
+.wd-cell.x, .wd-key.x { background: #52526a; border-color: #52526a; color: #fff; }
+.wd-keys { display: flex; flex-direction: column; gap: 5px; }
+.wd-krow { display: flex; gap: 4px; justify-content: center; }
+.wd-key { flex: 1; min-width: 0; height: 40px; padding: 0; border: 0; border-radius: 6px; background: var(--bg-tertiary); color: var(--text); font: inherit; font-weight: 700; text-transform: uppercase; cursor: pointer; }
+.wd-key.wide { flex: 1.6; }
+
+/* ---- голосование ---- */
+.poll { display: flex; flex-direction: column; gap: 8px; min-width: 240px; }
+.poll-q { text-align: left; }
+.poll-list { display: flex; flex-direction: column; gap: 6px; }
+.poll-opt { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-tertiary); color: var(--text); font: inherit; text-align: left; cursor: pointer; overflow: hidden; }
+.poll-opt.mine { border-color: var(--accent); }
+.poll-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); opacity: 0.28; transition: width 0.3s; }
+.poll-label, .poll-count { position: relative; }
+.poll-count { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.poll-foot { font-size: 11px; color: var(--text-muted); }
+.poll-row { display: flex; gap: 6px; margin: 6px 0; align-items: center; }
+.poll-input, #poll-q { flex: 1; width: 100%; box-sizing: border-box; padding: 9px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: inherit; resize: vertical; }
+#poll-q { margin: 8px 0; }
