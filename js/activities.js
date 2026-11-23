@@ -3,6 +3,8 @@ import { $, h, clear, getUser, toast, showModal, hideModal } from './util.js';
 import { resolveMode, sendPayload, uploadAttachment } from './messages.js';
 import { attachmentNode } from './media.js';
 import { drawNode, startDraw } from './draw.js';
+import { wordleNode, tttNode, startWordle, startTtt } from './games.js';
+import { pollNode, startPoll } from './poll.js';
 
 /* ---------- общее ---------- */
 const SEEN_KEY = 'low:acts';
@@ -454,6 +456,9 @@ export function activityNode(payload, msg) {
   const act = payload.act || {};
   if (act.type === 'wheel') return wheelNode(act, msg);
   if (act.type === 'draw') return drawNode(act);
+  if (act.type === 'wordle') return wordleNode(act);
+  if (act.type === 'ttt') return tttNode(act);
+  if (act.type === 'poll') return pollNode(act);
   if (act.type === 'whoami') return whoamiNode(act, msg);
   if (act.type === 'whoami-end') return whoamiEndNode(act);
   if (act.type === 'scratch' && payload.file?.url) return scratchNode(payload, msg);
@@ -471,12 +476,13 @@ const CATEGORIES = [
     { icon: '✨', title: 'Кнопка движухи', desc: 'Что-нибудь интересное' }
   ] },
   { icon: '🕹️', title: 'Игры', items: [
-    { icon: '🔤', title: 'Wordle', desc: 'Угадайте слово друга' },
+    { icon: '🔤', title: 'Wordle', desc: 'Угадайте слово друга', run: () => { const chat = currentChat(); if (chat) startWordle(chat); } },
+    { icon: '❌', title: 'Крестики-нолики', desc: 'Классика на двоих', run: () => { const chat = currentChat(); if (chat) startTtt(chat); } },
     { icon: '⚔️', title: 'Дуэль', desc: 'Сразитесь друг с другом' }
   ] },
   { icon: '💬', title: 'Общение', items: [
     { icon: '🎭', title: 'Кто я?', desc: 'Угадайте свою роль', run: startWhoAmI },
-    { icon: '🗳️', title: 'Голосование', desc: 'Решайте вместе' }
+    { icon: '🗳️', title: 'Голосование', desc: 'Решайте вместе', run: () => startPoll() }
   ] }
 ];
 
@@ -502,6 +508,6 @@ export function initActivities() {
   if (!anchor || $('act-btn')) return;
   anchor.after(h('button', {
     id: 'act-btn', class: 'btn-icon', title: 'Активности', text: '🎮',
-    onclick: e => { e.stopPropagation(); if (!currentChat()) return; ensureSheet(); showModal('act-modal'); }
+    onclick: e => { e.stopPropagation(); if (!state.chat) return; ensureSheet(); showModal('act-modal'); }
   }));
 }
