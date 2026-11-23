@@ -73,7 +73,7 @@ function findNode(id) {
 }
 
 async function decode(chat, msg) {
-  if (msg.v !== 2) return { text: msg.text || '', file: msg.file || null, replyTo: msg.replyTo || null, fwd: msg.fwd || null };
+  if (msg.v !== 2) return { text: msg.text || '', file: msg.file || null, replyTo: msg.replyTo || null, fwd: msg.fwd || null, act: msg.act || null };
   const key = await chatKey(chat);
   const data = key && msg.enc ? await decryptJson(key, msg.enc, messageAad(chat.id, msg.from)) : null;
   return data || { text: '🔒 не удалось расшифровать', failed: true };
@@ -337,7 +337,8 @@ export async function uploadAttachment(file, encrypted) {
 async function touchChat(chat, mode, payload) {
   let preview = '🔒 Сообщение';
   if (mode !== 'enc') {
-    const text = payload.text ? payload.text.slice(0, 45) + (payload.text.length > 45 ? '...' : '') : '📎 ' + (payload.file?.name || 'файл');
+    const text = payload.text ? payload.text.slice(0, 45) + (payload.text.length > 45 ? '...' : '')
+      : payload.act?.type === 'poll' ? '📊 ' + String(payload.act.q).slice(0, 40) : '📎 ' + (payload.file?.name || 'файл');
     preview = state.me.name + ': ' + text;
   }
   await db.ref('chats/' + chat.id).update({ lastMsg: preview, lastMsgTime: getCurrentTime(), lastAt: TS });
