@@ -1,7 +1,7 @@
 import { db, TS } from './firebase.js';
 import { state } from './state.js';
 import { ICE_SERVERS, LIMITS } from './config.js';
-import { $, toast, getUser, initials, userColor } from './util.js';
+import { $, toast, getUser, initials, userColor, avatarContent } from './util.js';
 import { otherUid } from './messages.js';
 
 let incomingRef = null;
@@ -26,6 +26,8 @@ function newCall(fields) {
     cam: false,
     screenOn: false,
     peerVideo: false,
+    minimized: false,
+    meter: null,
     ended: false
   };
 }
@@ -58,6 +60,7 @@ function syncLayout() {
   $('remote-video').classList.toggle('hidden', !call.peerVideo);
   $('remote-placeholder').classList.toggle('hidden', call.peerVideo);
   if (call.peerVideo) $('remote-video').play().catch(() => {});
+  syncDock();
 }
 
 function syncLocalPreview() {
@@ -75,6 +78,188 @@ function publishVideoState(call) {
   callRef(call).child('video_' + call.role).set(call.cam || call.screenOn).catch(() => {});
 }
 
+function setStatus(full, short = full) {
+  $('call-status').textContent = full;
+  $('dock-status').textContent = short;
+}
+
+/* ---------- свёрнутый звонок: плавающая плашка ---------- */
+const DOCK_KEY = 'low:dockCorner';
+const CORNERS = ['tl', 'tr', 'bl', 'br'];
+let dockCorner = (() => {
+  try { const c = localStorage.getItem(DOCK_KEY); return CORNERS.includes(c) ? c : 'bl'; } catch { return 'bl'; }
+})();
+
+function dockMargins() {
+  const mobile = window.innerWidth <= 768;
+  return { side: 16, top: mobile ? 64 : 72, bottom: mobile ? 84 : 88 };
+}
+
+function cornerPos(corner, dock) {
+  const m = dockMargins();
+  const w = dock.offsetWidth, h = dock.offsetHeight;
+  return {
+    left: corner[1] === 'l' ? m.side : Math.max(m.side, window.innerWidth - w - m.side),
+    top: corner[0] === 't' ? m.top : Math.max(m.top, window.innerHeight - h - m.bottom)
+  };
+}
+
+function placeDock(animate = false) {
+  const dock = $('call-dock');
+  if (dock.classList.contains('hidden') || dock.classList.contains('dragging')) return;
+  dock.classList.toggle('snap', animate);
+  const pos = cornerPos(dockCorner, dock);
+  dock.style.left = pos.left + 'px';
+  dock.style.top = pos.top + 'px';
+}
+
+function initDockDrag() {
+  const dock = $('call-dock');
+  const handle = $('dock-drag');
+  let drag = null;
+  handle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const rect = dock.getBoundingClientRect();
+    drag = { id: e.pointerId, dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    handle.setPointerCapture(e.pointerId);
+    dock.classList.remove('snap');
+    dock.classList.add('dragging');
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const x = Math.min(Math.max(0, e.clientX - drag.dx), window.innerWidth - dock.offsetWidth);
+    const y = Math.min(Math.max(0, e.clientY - drag.dy), window.innerHeight - dock.offsetHeight);
+    dock.style.left = x + 'px';
+    dock.style.top = y + 'px';
+  });
+  const finish = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag = null;
+    dock.classList.remove('dragging');
+    const rect = dock.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    dockCorner = (cy < window.innerHeight / 2 ? 't' : 'b') + (cx < window.innerWidth / 2 ? 'l' : 'r');
+    try { localStorage.setItem(DOCK_KEY, dockCorner); } catch {}
+    placeDock(true);
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+}
+initDockDrag();
+window.addEventListener('resize', () => placeDock(false));
+
+function fillDockAvatar(el, user) {
+  el.style.background = userColor(user);
+  el.replaceChildren(user.img ? avatarContent(user) : initials(user.name));
+}
+
+// Единое место, где кнопки обоих окон (полного и плашки) узнают состояние звонка.
+function syncControls() {
+  const call = state.call;
+  if (!call) return;
+  const mic = call.muted ? '🔇' : '🎤';
+  for (const id of ['mute-button', 'dock-mute']) {
+    $(id).textContent = mic;
+    $(id).classList.toggle('danger', call.muted);
+  }
+  const cam = call.cam && !call.screenOn;
+  $('camera-button').classList.toggle('on', cam);
+  $('dock-camera').classList.toggle('on', cam);
+  $('screen-button').classList.toggle('on', call.screenOn);
+  $('dock-screen').classList.toggle('on', call.screenOn);
+}
+
+function syncDock() {
+  const call = state.call;
+  if (!call) return;
+  const showVideo = call.minimized && call.peerVideo;
+  $('dock-video-box').classList.toggle('hidden', !showVideo);
+  if (showVideo) {
+    const v = $('dock-video');
+    if (v.srcObject !== call.remote) v.srcObject = call.remote;
+    v.play().catch(() => {});
+  }
+  placeDock(true);
+}
+
+export function minimizeCall() {
+  const call = state.call;
+  if (!call || call.minimized) return;
+  call.minimized = true;
+  $('call-overlay').classList.add('hidden');
+  $('call-dock').classList.remove('hidden');
+  $('remote-audio').play().catch(() => {});
+  syncControls();
+  syncDock();
+  placeDock(false);
+}
+
+export function expandCall() {
+  const call = state.call;
+  if (!call || !call.minimized) return;
+  call.minimized = false;
+  $('call-dock').classList.add('hidden');
+  $('dock-video').srcObject = null;
+  $('dock-video-box').classList.add('hidden');
+  $('call-overlay').classList.remove('hidden');
+  $('remote-audio').play().catch(() => {});
+  syncLayout();
+  syncControls();
+}
+
+/* Индикатор «говорит»: зелёное кольцо у аватарки, как в Discord. */
+function startMeters(call) {
+  if (call.meter) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  let ctx;
+  try { ctx = new AC(); } catch { return; }
+  const mk = (stream, el, muted) => ({ stream, el, muted, analyser: null, buf: null, until: 0 });
+  const meters = [
+    mk(call.remote, $('dock-peer'), () => false),
+    mk(call.local, $('dock-me'), () => call.muted)
+  ];
+  const timer = setInterval(() => {
+    if (!call.minimized) {
+      meters.forEach(m => m.el.classList.remove('speaking'));
+      return;
+    }
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const now = Date.now();
+    for (const m of meters) {
+      if (!m.analyser && m.stream && m.stream.getAudioTracks().length) {
+        try {
+          m.analyser = ctx.createAnalyser();
+          m.analyser.fftSize = 512;
+          m.buf = new Uint8Array(m.analyser.fftSize);
+          ctx.createMediaStreamSource(m.stream).connect(m.analyser);
+        } catch { m.analyser = null; continue; }
+      }
+      if (!m.analyser) continue;
+      let loud = false;
+      if (!m.muted()) {
+        m.analyser.getByteTimeDomainData(m.buf);
+        let peak = 0;
+        for (let i = 0; i < m.buf.length; i++) peak = Math.max(peak, Math.abs(m.buf[i] - 128));
+        loud = peak > 6;
+      }
+      if (loud) m.until = now + 350;
+      m.el.classList.toggle('speaking', now < m.until);
+    }
+  }, 120);
+  call.meter = { ctx, timer };
+}
+
+function stopMeters(call) {
+  if (!call.meter) return;
+  clearInterval(call.meter.timer);
+  call.meter.ctx.close().catch(() => {});
+  call.meter = null;
+  $('dock-peer').classList.remove('speaking');
+  $('dock-me').classList.remove('speaking');
+}
+
 function startTimer(call) {
   if (call.timers.tick) return;
   clearTimeout(call.timers.ring);
@@ -84,8 +269,9 @@ function startTimer(call) {
     seconds++;
     const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
     const ss = String(seconds % 60).padStart(2, '0');
-    $('call-status').textContent = (call.type === 'video' ? 'ВИДЕО' : 'ЗВОНОК') + ' • ' + mm + ':' + ss;
+    setStatus((call.type === 'video' ? 'ВИДЕО' : 'ЗВОНОК') + ' • ' + mm + ':' + ss, mm + ':' + ss);
   }, 1000);
+  startMeters(call);
 }
 
 function createPeer(call) {
@@ -115,6 +301,7 @@ function attachLocal(call, stream) {
   call.camTrack = stream.getVideoTracks()[0] || null;
   call.cam = !!call.camTrack;
   stream.getTracks().forEach(t => call.pc.addTrack(t, stream));
+  syncControls();
 }
 
 function pushIce(call, candidate) {
@@ -132,7 +319,12 @@ function flushIce(call) {
 
 function showCallUI(call, user) {
   $('call-title').textContent = user.name;
-  $('call-status').textContent = call.role === 'caller' ? 'ВЫЗОВ...' : 'СОЕДИНЕНИЕ...';
+  const wait = call.role === 'caller' ? 'ВЫЗОВ...' : 'СОЕДИНЕНИЕ...';
+  setStatus(wait);
+  $('dock-name').textContent = user.name;
+  fillDockAvatar($('dock-peer'), user);
+  fillDockAvatar($('dock-me'), state.me);
+  $('call-dock').classList.add('hidden');
   $('remote-label').textContent = user.name;
   const rp = $('remote-placeholder');
   rp.style.background = userColor(user);
@@ -142,11 +334,10 @@ function showCallUI(call, user) {
   lp.textContent = initials(state.me.name);
   $('remote-audio').srcObject = call.remote;
   $('remote-video').srcObject = call.remote;
-  $('mute-button').textContent = '🎤';
-  $('mute-button').classList.remove('danger');
   $('call-overlay').classList.remove('hidden');
   $('call-overlay').addEventListener('click', () => $('remote-audio').play().catch(() => {}), { once: true });
   syncLocalPreview();
+  syncControls();
 }
 
 function watchCommon(call) {
@@ -158,7 +349,11 @@ function watchCommon(call) {
 
 export async function startCall(type) {
   const chat = state.chat;
-  if (!chat || chat.type !== 'dm' || state.call || state.incoming) return;
+  if (!chat || chat.type !== 'dm' || state.incoming) return;
+  if (state.call) {
+    toast('Звонок', 'Сначала завершите текущий звонок');
+    return;
+  }
   const calleeId = otherUid(chat);
   if (!calleeId) return;
   const call = newCall({ id: db.ref('calls/' + calleeId).push().key, calleeId, callerId: state.me.uid, role: 'caller', type });
@@ -296,7 +491,10 @@ export function endCall() {
   call.screen?.getTracks().forEach(t => t.stop());
   call.camTrack?.stop();
   call.pc?.close();
-  for (const id of ['remote-audio', 'remote-video', 'local-video']) $(id).srcObject = null;
+  stopMeters(call);
+  for (const id of ['remote-audio', 'remote-video', 'local-video', 'dock-video']) $(id).srcObject = null;
+  $('call-dock').classList.add('hidden');
+  $('dock-video-box').classList.add('hidden');
   $('remote-video').classList.add('hidden');
   $('local-video').classList.add('hidden');
   $('call-videos').classList.add('hidden');
@@ -308,8 +506,7 @@ export function toggleMute() {
   if (!call) return;
   call.muted = !call.muted;
   call.local?.getAudioTracks().forEach(t => { t.enabled = !call.muted; });
-  $('mute-button').textContent = call.muted ? '🔇' : '🎤';
-  $('mute-button').classList.toggle('danger', call.muted);
+  syncControls();
 }
 
 async function swapVideo(call) {
@@ -318,6 +515,7 @@ async function swapVideo(call) {
   const track = call.screenOn ? call.screen.getVideoTracks()[0] : call.cam ? call.camTrack : null;
   await sender.replaceTrack(track);
   syncLocalPreview();
+  syncControls();
   publishVideoState(call);
 }
 
