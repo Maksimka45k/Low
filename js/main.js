@@ -10,7 +10,7 @@ import { initSwipeBack } from './swipe.js';
 import { initActivities } from './activities.js';
 import { sendMessage, handleKey, autoResize, selectFile, resetFile, cancelReply, cancelEditing, hideContextMenu } from './messages.js';
 import { askDeleteChat, deleteChatSelf, deleteChatBoth, createDM, acceptRequest, rejectRequest, setGroupType, addMember, removeMember, createGroup, invite, leaveGroup, copyChannelLink, joinChannel, showChatInfo } from './contacts.js';
-import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, listenForCalls, stopCalls } from './calls.js';
+import { startCall, acceptCall, rejectCall, endCall, toggleMute, toggleCamera, toggleScreen, minimizeCall, expandCall, listenForCalls, stopCalls } from './calls.js';
 import { uploadMoment } from './moments.js';
 import { closeMediaModal } from './media.js';
 import {
@@ -76,6 +76,8 @@ const actions = {
   camera: toggleCamera,
   screen: toggleScreen,
   endCall,
+  minimizeCall,
+  expandCall,
   uploadMoment,
   closeMedia: closeMediaModal
 };
@@ -89,9 +91,13 @@ document.addEventListener('click', e => {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  // Esc больше не бросает трубку: он сворачивает окно звонка в плашку.
+  if (state.call && !state.call.minimized) {
+    minimizeCall();
+    return;
+  }
   document.querySelectorAll('.modal-overlay:not([data-lock])').forEach(m => m.classList.add('hidden'));
   closeMediaModal();
-  endCall();
 });
 
 document.querySelectorAll('.modal-overlay:not([data-lock])').forEach(el =>
