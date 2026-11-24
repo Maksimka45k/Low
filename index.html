@@ -321,6 +321,7 @@
   </div>
 
   <div id="call-overlay" class="hidden">
+    <button class="call-minimize" data-act="minimizeCall" title="Свернуть (звонок продолжится)">⤓</button>
     <div class="call-title" id="call-title"></div>
     <div class="call-status" id="call-status">СОЕДИНЕНИЕ...</div>
     <div class="call-videos hidden" id="call-videos">
@@ -341,6 +342,29 @@
       <button class="call-button" id="camera-button" data-act="camera">📹</button>
       <button class="call-button" id="screen-button" data-act="screen">🖥</button>
       <button class="call-button danger" data-act="endCall">📵</button>
+    </div>
+  </div>
+
+  <div id="call-dock" class="hidden">
+    <div class="dock-head" id="dock-drag" title="Перетащите, чтобы переместить">
+      <div class="dock-avatars">
+        <div class="dock-avatar" id="dock-peer"></div>
+        <div class="dock-avatar small" id="dock-me"></div>
+      </div>
+      <div class="dock-info">
+        <div class="dock-name" id="dock-name"></div>
+        <div class="dock-status" id="dock-status"></div>
+      </div>
+    </div>
+    <div class="dock-video hidden" id="dock-video-box" data-act="expandCall" title="Развернуть звонок">
+      <video id="dock-video" autoplay muted playsinline></video>
+    </div>
+    <div class="dock-controls">
+      <button class="dock-btn" id="dock-mute" data-act="mute" title="Микрофон">🎤</button>
+      <button class="dock-btn" id="dock-camera" data-act="camera" title="Камера">📹</button>
+      <button class="dock-btn" id="dock-screen" data-act="screen" title="Демонстрация экрана">🖥</button>
+      <button class="dock-btn" data-act="expandCall" title="Открыть окно звонка">⤢</button>
+      <button class="dock-btn danger" data-act="endCall" title="Завершить звонок">📵</button>
     </div>
   </div>
 
