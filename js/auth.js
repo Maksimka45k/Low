@@ -1,6 +1,7 @@
 import { auth, db, TS, EmailAuthProvider, prepareAuthStorage } from './firebase.js';
 import { state } from './state.js';
 import { $, showModal, hideModal, colorFromNick, resetUserCache } from './util.js';
+import { SUPPORT_URL } from './config.js';
 import { unlockKeys, restoreKeys, forgetKeys, resetCrypto, cryptoAvailable } from './crypto.js';
 
 const DOMAIN = '@low.local';
@@ -13,6 +14,8 @@ const tosAccepted = form => $(form + '-tos').checked;
 
 let hooks = null;
 let unlockResolver = null;
+let newPwResolver = null;
+let changedTo = null;
 let busy = false;
 let lastForm = 'login';
 
@@ -135,6 +138,60 @@ export function cancelUnlock() {
   auth.signOut();
 }
 
+// После сброса пароля админом у аккаунта есть метка pwReset (custom claim). Пока она стоит, пользователь
+// обязан задать свой пароль; метку снимает сервер (/finish), и только если пароль действительно сменился.
+async function mustChangePassword(user) {
+  try { return !!(await user.getIdTokenResult()).claims.pwReset; } catch { return false; }
+}
+
+function askNewPassword() {
+  $('newpw-1').value = '';
+  $('newpw-2').value = '';
+  $('newpw-error').textContent = '';
+  changedTo = null;
+  showModal('newpw-modal');
+  return new Promise(resolve => { newPwResolver = resolve; });
+}
+
+async function finishReset(user) {
+  if (!SUPPORT_URL) throw new Error('сервис восстановления не настроен');
+  const res = await fetch(SUPPORT_URL + '/finish', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + await user.getIdToken(true) }
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'HTTP ' + res.status);
+}
+
+export async function submitNewPassword() {
+  const user = auth.currentUser;
+  const pw = $('newpw-1').value;
+  const fail = text => { $('newpw-error').textContent = text; };
+  if (!user) return;
+  if (pw.length < 6) return fail('Пароль минимум 6 символов');
+  if (pw !== $('newpw-2').value) return fail('Пароли не совпадают');
+  if (pw === state.pendingPassword && pw !== changedTo) return fail('Новый пароль должен отличаться от временного');
+  try {
+    if (changedTo !== pw) {
+      await user.updatePassword(pw);
+      changedTo = pw;
+    }
+    await finishReset(user);
+  } catch (e) {
+    return fail(e.code === 'auth/weak-password' ? 'Слишком простой пароль' : 'Ошибка: ' + e.message + ' — попробуйте ещё раз');
+  }
+  state.pendingPassword = pw;
+  hideModal('newpw-modal');
+  newPwResolver?.(true);
+  newPwResolver = null;
+}
+
+export function cancelNewPassword() {
+  hideModal('newpw-modal');
+  newPwResolver?.(false);
+  newPwResolver = null;
+  auth.signOut();
+}
+
 async function ensureKeys(user) {
   if ((await restoreKeys(user.uid)) && state.me.pubKey) return true;
   if (state.pendingPassword) {
@@ -175,6 +232,7 @@ async function startSession(user) {
     const ban = (await db.ref('bans/' + user.uid).once('value')).val();
     if (ban && ban.until > Date.now()) throw new Error('Аккаунт заблокирован' + (ban.reason ? ': ' + ban.reason : ''));
     state.me = snap.exists() ? { ...snap.val(), uid: user.uid } : await repairProfile(user);
+    if (await mustChangePassword(user) && !(await askNewPassword())) return;
     if (!(await ensureKeys(user))) return;
     window.__lowStage = 'ready';
     state.pendingPassword = null;

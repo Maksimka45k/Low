@@ -1,7 +1,7 @@
 import { db } from './firebase.js';
 import { state } from './state.js';
 import { $, showModal, hideModal, toast } from './util.js';
-import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, cancelUnlock, logout } from './auth.js';
+import { initAuth, switchAuthTab, handleLogin, handleRegister, submitUnlock, cancelUnlock, submitNewPassword, cancelNewPassword, logout } from './auth.js';
 import { startChatList, stopChatList, startRequests, stopRequests, setTab, goBack, closeChat, updatePanels, filterChats, cachedChats } from './chats.js';
 import { startPresence, stopPresence } from './presence.js';
 import { initGif } from './gif.js';
@@ -35,6 +35,8 @@ const actions = {
   register: handleRegister,
   unlock: submitUnlock,
   unlockLogout: cancelUnlock,
+  newPassword: submitNewPassword,
+  newPasswordLogout: cancelNewPassword,
   modal: showModal,
   closeModal: hideModal,
   settings: toggleSettings,
@@ -112,6 +114,7 @@ onEnter('register-password', handleRegister);
 onEnter('dm-nick', createDM);
 onEnter('member-nick', addMember);
 onEnter('unlock-password', submitUnlock);
+onEnter('newpw-2', submitNewPassword);
 
 $('message-input').addEventListener('keydown', handleKey);
 $('message-input').addEventListener('input', e => autoResize(e.target));

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app; frame-src https://*.firebaseapp.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app; frame-src https://*.firebaseapp.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Low · Admin</title>
 <link rel="stylesheet" href="admin.css">
@@ -35,6 +35,7 @@
 </section>
 <dialog id="dlg">
   <h3 id="dlg-title"></h3>
+  <p id="dlg-note" hidden></p>
   <select id="dlg-dur">
     <option value="3600">1 час</option><option value="86400">1 день</option>
     <option value="604800">7 дней</option><option value="2592000">30 дней</option>
@@ -43,6 +44,13 @@
   <input id="dlg-reason" maxlength="200" placeholder="причина (необязательно)">
   <input id="dlg-word">
   <div class="acts"><button id="dlg-no" class="btn">Отмена</button><button id="dlg-ok" class="btn primary">Подтвердить</button></div>
+</dialog>
+<dialog id="dlg-pw">
+  <h3>Временный пароль для <span id="pw-nick"></span></h3>
+  <input id="pw-value" readonly>
+  <p>Покажется один раз, нигде не сохраняется. Передайте владельцу аккаунта тем же каналом, где вы его проверили. При входе он обязан сразу задать свой пароль.</p>
+  <p>Ключи шифрования пересозданы: прежнюю переписку прочитать не получится, у собеседников сменится код безопасности.</p>
+  <div class="acts"><button id="pw-copy" class="btn">Копировать</button><button id="pw-done" class="btn primary">Готово</button></div>
 </dialog>
 <div id="toast"></div>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>

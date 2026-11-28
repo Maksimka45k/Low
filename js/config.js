@@ -8,6 +8,10 @@ export const FIREBASE_CONFIG = {
   appId: '1:1083975450515:web:411c77239a5f0d252c7266'
 };
 
+// Адрес Cloudflare Worker для восстановления доступа (см. support-worker/README.md), без слэша в конце.
+// Пока пусто — функция сброса пароля выключена.
+export const SUPPORT_URL = 'https://low-support.milisik.workers.dev';
+
 export const ICE_SERVERS = {
   iceServers: [
     { urls: "stun:stun.relay.metered.ca:80" },

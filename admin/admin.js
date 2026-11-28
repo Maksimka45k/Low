@@ -1,4 +1,4 @@
-import { FIREBASE_CONFIG } from '../js/config.js';
+import { FIREBASE_CONFIG, SUPPORT_URL } from '../js/config.js';
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth(), db = firebase.database(), TS = firebase.database.ServerValue.TIMESTAMP;
@@ -103,6 +103,8 @@ function ask(title, o = {}) {
     $('dlg-reason').hidden = !(o.dur || o.input);
     $('dlg-reason').placeholder = o.input || 'причина (необязательно)';
     $('dlg-reason').value = '';
+    $('dlg-note').hidden = !o.note;
+    $('dlg-note').textContent = o.note || '';
     $('dlg-word').hidden = !o.word;
     $('dlg-word').value = '';
     $('dlg-word').placeholder = o.word ? 'введите «' + o.word + '» для подтверждения' : '';
@@ -179,6 +181,39 @@ async function delMoment(m) {
   run(async () => { await db.ref('moments/' + m.id).remove(); await log('delete-moment', m.id, m.userNick); }, 'Момент удалён');
 }
 
+/* ---------- восстановление доступа ---------- */
+function showTempPassword(nick, password) {
+  const d = $('dlg-pw');
+  $('pw-nick').textContent = '@' + nick;
+  $('pw-value').value = password;
+  $('pw-copy').onclick = () => navigator.clipboard.writeText(password).then(() => toast('Скопировано'), () => { $('pw-value').select(); toast('Выделено — скопируйте вручную', 1); });
+  $('pw-done').onclick = () => { $('pw-value').value = ''; d.close(); };
+  d.onclose = () => { $('pw-value').value = ''; d.onclose = null; };
+  d.showModal();
+}
+
+async function resetPassword(u) {
+  if (!SUPPORT_URL) return toast('Не настроено: задайте SUPPORT_URL в js/config.js', 1);
+  const mine = Object.values(S.chats).filter(c => (c.members || c.participants || {})[u.uid]);
+  const named = mine.filter(c => c.type !== 'dm' && c.name).slice(0, 5).map(c => '«' + c.name + '»').join(', ');
+  const note = 'Прежде чем сбрасывать, убедитесь, что пишет владелец. Попросите назвать то, что знает только он, и сверьте:\n' +
+    '• регистрация: ' + (u.createdAt ? new Date(u.createdAt).toLocaleDateString('ru') : 'неизвестно') + '\n' +
+    '• чатов: ' + mine.length + (named ? '\n• группы/каналы: ' + named : '') + '\n' +
+    'Старая переписка пропадёт — ключи шифрования создаются заново.';
+  if (!await ask('Сбросить пароль @' + u.nick + '?', { word: u.nick, note })) return;
+  try {
+    const res = await fetch(SUPPORT_URL + '/reset', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + await auth.currentUser.getIdToken(true), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: u.uid })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    showTempPassword(data.nick || u.nick, data.tempPassword);
+    load();
+  } catch (e) { toast('Ошибка: ' + e.message, 1); }
+}
+
 /* ---------- отрисовка ---------- */
 const MEDIA = /^https:\/\/(files|litter)\.catbox\.moe\/[\w.\-/]+$/;
 const ICON = { dm: '💬', group: '👥', channel: '📢' };
@@ -192,6 +227,7 @@ const usersRows = q => Object.values(S.users)
       [live(b) && tag('БАН ' + when(b.until) + (b.reason ? ' · ' + b.reason : ''), 'bad'), live(m) && tag('МУТ ' + when(m.until) + (m.reason ? ' · ' + m.reason : ''), 'warn')],
       [live(b) ? btn('Разбан', () => drop('bans', u.uid)) : btn('Бан', () => flag('bans', u.uid, 'Бан @' + u.nick), 'danger'),
        live(m) ? btn('Размут', () => drop('mutes', u.uid)) : btn('Мут', () => flag('mutes', u.uid, 'Мут @' + u.nick)),
+       btn('Сброс пароля', () => resetPassword(u)),
        btn('Удалить', () => wipeUser(u), 'danger')]);
   });
 
